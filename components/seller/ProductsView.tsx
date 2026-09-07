@@ -148,10 +148,10 @@ export function ProductsView({
   return (
     <div className="products-view-container">
       {/* Top Header */}
-      <div className="products-header flex justify-between items-center mb-6">
+      <div className="products-header flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Products</h1>
-          <p className="text-sm text-slate-500 font-medium mt-0.5">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">My Products</h1>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
             <span className="font-semibold text-slate-700">{products.length}</span> of {maxSlots} slots used
           </p>
         </div>
@@ -159,7 +159,7 @@ export function ProductsView({
         <button
           type="button"
           id="add-products-header-btn"
-          className="add-product-btn flex items-center gap-2 bg-[#5e7793] hover:bg-[#4d647e] text-white font-medium px-4 py-2.5 rounded-lg shadow-sm transition-all"
+          className="add-product-btn flex items-center justify-center gap-2 bg-[#5e7793] hover:bg-[#4d647e] text-white font-medium px-4 py-2.5 rounded-lg shadow-sm transition-all w-full sm:w-auto cursor-pointer"
           onClick={openAddModal}
         >
           <Plus size={18} />
@@ -168,8 +168,8 @@ export function ProductsView({
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="products-toolbar flex flex-wrap gap-3 items-center justify-between mb-6 bg-white p-3.5 rounded-xl border border-slate-200">
-        <div className="relative flex-1 min-w-[240px]">
+      <div className="products-toolbar flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between mb-6 bg-white p-3.5 rounded-xl border border-slate-200">
+        <div className="relative flex-1 min-w-0">
           <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -180,7 +180,7 @@ export function ProductsView({
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between sm:justify-start gap-2">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Category:</span>
           <select
             className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-medium py-2 px-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -259,7 +259,7 @@ export function ProductsView({
               </div>
 
               {/* Quick Actions overlay on hover */}
-              <div className="action-buttons-overlay absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-white/95 backdrop-blur-sm p-1 rounded-lg border border-slate-200 shadow-sm">
+              <div className="action-buttons-overlay absolute top-2 right-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-white/95 backdrop-blur-sm p-1 rounded-lg border border-slate-200 shadow-sm">
                 <button
                   type="button"
                   className="p-1 text-slate-500 hover:text-blue-600 rounded hover:bg-slate-100"
@@ -287,8 +287,8 @@ export function ProductsView({
 
       {/* Add Product Modal */}
       {isAddModalOpen && (
-        <div className="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="modal-content bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+        <div className="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="modal-content bg-white rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-100 max-h-[88vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-4 border-b border-slate-100 mb-5">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -323,7 +323,7 @@ export function ProductsView({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Category
@@ -358,7 +358,7 @@ export function ProductsView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Cost Price ($)
@@ -426,8 +426,8 @@ export function ProductsView({
 
       {/* Edit Product Modal */}
       {isEditModalOpen && selectedProduct && (
-        <div className="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="modal-content bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+        <div className="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="modal-content bg-white rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-100 max-h-[88vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-4 border-b border-slate-100 mb-5">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -461,7 +461,7 @@ export function ProductsView({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Category
@@ -496,7 +496,7 @@ export function ProductsView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Cost Price ($)

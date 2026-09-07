@@ -63,21 +63,21 @@ export function SupportChatModal({
 
   return (
     <>
-      {/* Floating Chat Button (Matching the green bubble in screenshots) */}
+      {/* Floating Chat Button */}
       <button
         type="button"
         id="seller-support-chat-btn"
-        className="chat-fab-button fixed bottom-6 right-6 w-14 h-14 bg-[#00bf87] hover:bg-[#00a876] text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all z-40"
+        className="chat-fab-button fixed bottom-18 md:bottom-6 right-4 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 bg-[#00bf87] hover:bg-[#00a876] text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all z-40 cursor-pointer"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Open seller support chat"
         title="Seller Support Chat"
       >
-        {isOpen ? <X size={26} /> : <MessageCircle size={26} />}
+        {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
       </button>
 
       {/* Chat Drawer / Modal */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 w-96 max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200">
+        <div className="fixed bottom-28 md:bottom-24 right-3 sm:right-6 w-[calc(100vw-24px)] sm:w-96 max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200">
           {/* Header */}
           <div className="bg-[#123d63] text-white p-4 flex justify-between items-center">
             <div className="flex items-center gap-3">

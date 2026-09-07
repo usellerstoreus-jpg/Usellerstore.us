@@ -37,7 +37,13 @@ import {
   CheckCircle,
   Eye,
   Box,
-  Wallet
+  Wallet,
+  Menu,
+  LayoutDashboard,
+  Package,
+  Bell,
+  User,
+  LogOut
 } from 'lucide-react'
 import {
   initialProducts,
@@ -108,64 +114,109 @@ function AdminSidebar({
   active,
   onNavigate,
   onSignOut,
+  isOpenOnMobile = false,
+  onCloseMobile,
 }: {
   active: string
   onNavigate: (label: string) => void
   onSignOut: () => void
+  isOpenOnMobile?: boolean
+  onCloseMobile?: () => void
 }) {
+  const handleNav = (label: string) => {
+    onNavigate(label)
+    if (onCloseMobile) onCloseMobile()
+  }
+
   return (
-    <aside className="sidebar admin-sidebar">
-      <div className="brand">
-        <div className="brand-mark">
-          <Grid2X2 size={22} strokeWidth={2.4} />
-        </div>
-        <div className="brand-info">
-          <strong>U Seller Store</strong>
-          <span>Management Console</span>
-        </div>
-      </div>
+    <>
+      {isOpenOnMobile && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 md:hidden transition-opacity"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
 
-      <div className="admin-user">
-        <div className="avatar admin-avatar">
-          Z<span className="online-dot" />
-        </div>
-        <div>
-          <strong>zain</strong>
-          <span>Administrator</span>
-        </div>
-      </div>
-
-      <div className="invite">
-        <span>
-          INVITE <b>MXSVHSDL</b>
-        </span>
-        <Copy size={16} className="cursor-pointer" />
-        <Pencil size={16} className="cursor-pointer" />
-        <RefreshCw size={16} className="cursor-pointer" />
-      </div>
-
-      <nav className="admin-nav" aria-label="Admin navigation">
-        {adminNav.map(({ label, icon: Icon, group }, index) => (
-          <div key={label}>
-            {(index === 0 || adminNav[index - 1].group !== group) && (
-              <span className="nav-group">{group}</span>
-            )}
+      <aside
+        className={`sidebar admin-sidebar ${
+          isOpenOnMobile
+            ? 'fixed inset-y-0 left-0 z-50 flex shadow-2xl translate-x-0 transition-transform duration-300 ease-in-out w-[280px] bg-white'
+            : 'hidden md:flex'
+        }`}
+      >
+        <div className="brand flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="brand-mark shrink-0">
+              <Grid2X2 size={22} strokeWidth={2.4} />
+            </div>
+            <div className="brand-info truncate">
+              <strong>U Seller Store</strong>
+              <span>Management Console</span>
+            </div>
+          </div>
+          {isOpenOnMobile && (
             <button
               type="button"
-              className={active === label ? 'active' : ''}
-              onClick={() => onNavigate(label)}
+              className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              onClick={onCloseMobile}
+              aria-label="Close menu"
             >
-              <Icon size={19} />
-              <span>{label}</span>
+              <X size={20} />
             </button>
-          </div>
-        ))}
-      </nav>
+          )}
+        </div>
 
-      <button type="button" className="sign-out" onClick={onSignOut}>
-        <span>Sign Out</span>
-      </button>
-    </aside>
+        <div className="admin-user">
+          <div className="avatar admin-avatar">
+            Z<span className="online-dot" />
+          </div>
+          <div>
+            <strong>zain</strong>
+            <span>Administrator</span>
+          </div>
+        </div>
+
+        <div className="invite">
+          <span>
+            INVITE <b>MXSVHSDL</b>
+          </span>
+          <Copy size={16} className="cursor-pointer" />
+          <Pencil size={16} className="cursor-pointer" />
+          <RefreshCw size={16} className="cursor-pointer" />
+        </div>
+
+        <nav className="admin-nav flex-1 overflow-y-auto" aria-label="Admin navigation">
+          {adminNav.map(({ label, icon: Icon, group }, index) => (
+            <div key={label}>
+              {(index === 0 || adminNav[index - 1].group !== group) && (
+                <span className="nav-group">{group}</span>
+              )}
+              <button
+                type="button"
+                className={active === label ? 'active' : ''}
+                onClick={() => handleNav(label)}
+              >
+                <Icon size={19} />
+                <span>{label}</span>
+              </button>
+            </div>
+          ))}
+        </nav>
+
+        <button
+          type="button"
+          className="sign-out mt-auto"
+          onClick={() => {
+            if (onCloseMobile) onCloseMobile()
+            onSignOut()
+          }}
+        >
+          <LogOut size={18} />
+          <span>Sign Out</span>
+        </button>
+      </aside>
+    </>
   )
 }
 
@@ -184,6 +235,7 @@ function AdminPanel({
   const [menu, setMenu] = useState(false)
   const [kycStatus, setKycStatus] = useState<'pending' | 'approved'>('pending')
   const [withdrawalStatus, setWithdrawalStatus] = useState<'pending' | 'completed'>('pending')
+  const [isAdminMobileOpen, setIsAdminMobileOpen] = useState(false)
 
   const sellerVisible = useMemo(() => 'tester'.includes(search.toLowerCase()) || 'zain'.includes(search.toLowerCase()), [search])
 
@@ -196,9 +248,39 @@ function AdminPanel({
           onToast(`${label} view selected`)
         }}
         onSignOut={onSignOut}
+        isOpenOnMobile={isAdminMobileOpen}
+        onCloseMobile={() => setIsAdminMobileOpen(false)}
       />
       <main className="admin-main">
-        <div className="admin-topbar">
+        {/* Admin Mobile Top Header */}
+        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              className="p-1.5 -ml-1 text-slate-300 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
+              onClick={() => setIsAdminMobileOpen(true)}
+              aria-label="Open admin menu"
+            >
+              <Menu size={22} />
+            </button>
+            <div>
+              <strong className="text-xs font-bold text-white block leading-tight">Admin Console</strong>
+              <span className="text-[10px] text-purple-300 font-semibold">{active}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition-colors flex items-center gap-1 cursor-pointer"
+            onClick={() => {
+              onSwitchToSeller()
+              onToast('Switched to Seller Storefront view')
+            }}
+          >
+            <Store size={13} /> Storefront
+          </button>
+        </div>
+
+        <div className="admin-topbar hidden md:flex">
           <div className="admin-heading">
             <span className="section-mark">
               <ShieldCheck size={22} />
@@ -307,8 +389,8 @@ function AdminPanel({
                   </button>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                <div className="overflow-x-auto -mx-2 sm:mx-0">
+                  <table className="w-full text-left text-xs min-w-[550px]">
                     <thead>
                       <tr className="border-b border-slate-100 text-slate-400 uppercase font-semibold">
                         <th className="pb-3">Merchant</th>
@@ -376,8 +458,8 @@ function AdminPanel({
 
           {active === 'Sellers' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <label className="search-box flex-1 max-w-md">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <label className="search-box flex-1 max-w-md w-full">
                   <Search size={16} />
                   <input
                     aria-label="Search sellers"
@@ -1118,6 +1200,7 @@ export default function Page() {
   const [toast, setToast] = useState('')
   const [modeOpen, setModeOpen] = useState(false)
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [orders, setOrders] = useState<Order[]>(initialOrders)
@@ -1334,7 +1417,46 @@ export default function Page() {
       )}
 
       {mode === 'seller' ? (
-        <div className="app-shell seller-shell">
+        <div className="app-shell seller-shell flex flex-col md:flex-row min-h-screen">
+          {/* Mobile Top Header */}
+          <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                className="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer"
+                onClick={() => setIsMobileMenuOpen(true)}
+                aria-label="Open menu"
+              >
+                <Menu size={22} />
+              </button>
+              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSellerTab('Dashboard')}>
+                <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                  {profile.avatarLetter || 'U'}
+                </div>
+                <div>
+                  <strong className="text-xs text-slate-900 block font-bold leading-tight truncate max-w-[140px]">
+                    {profile.shopName}
+                  </strong>
+                  <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Store
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200/80 text-blue-700 text-xs font-bold shadow-2xs hover:bg-blue-100 transition-colors cursor-pointer"
+                onClick={() => setIsBalanceModalOpen(true)}
+                title="Click to view balance details"
+              >
+                <Wallet size={12} />
+                <span>${profile.balance.toFixed(2)}</span>
+              </button>
+            </div>
+          </div>
+
           <SellerSidebar
             activeTab={sellerTab}
             onSelectTab={(tab) => {
@@ -1348,9 +1470,11 @@ export default function Page() {
             ownerName={profile.ownerName}
             balance={profile.balance}
             guarantee={profile.guarantee}
+            isOpenOnMobile={isMobileMenuOpen}
+            onCloseMobile={() => setIsMobileMenuOpen(false)}
           />
 
-          <main className="seller-main">
+          <main className="seller-main flex-1 overflow-y-auto pb-24 md:pb-12">
             {sellerTab === 'Dashboard' && (
               <DashboardView
                 profile={profile}
@@ -1406,6 +1530,47 @@ export default function Page() {
               />
             )}
           </main>
+
+          {/* Mobile Bottom Navigation Bar */}
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 py-1 shadow-lg flex justify-around items-center">
+            {[
+              { id: 'Dashboard' as const, label: 'Cockpit', icon: LayoutDashboard },
+              { id: 'Products' as const, label: 'Products', icon: Package },
+              { id: 'Orders' as const, label: 'Orders', icon: ShoppingBag },
+              { id: 'Notifications' as const, label: 'Alerts', icon: Bell, badge: unreadNotifCount },
+              { id: 'Profile' as const, label: 'Account', icon: User },
+            ].map(({ id, label, icon: Icon, badge }) => {
+              const isActive = sellerTab === id
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all relative cursor-pointer min-w-[56px] ${
+                    isActive
+                      ? 'text-blue-600 font-bold'
+                      : 'text-slate-500 hover:text-slate-800 font-medium'
+                  }`}
+                  onClick={() => {
+                    setSellerTab(id)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
+                >
+                  <div className="relative">
+                    <Icon size={20} className={isActive ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+                    {Boolean(badge && badge > 0) && (
+                      <span className="absolute -top-1 -right-2 bg-blue-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                        {badge}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] mt-0.5 tracking-tight">{label}</span>
+                  {isActive && (
+                    <span className="w-1 h-1 rounded-full bg-blue-600 mt-0.5" />
+                  )}
+                </button>
+              )
+            })}
+          </nav>
 
           <SupportChatModal onToast={showToast} />
 

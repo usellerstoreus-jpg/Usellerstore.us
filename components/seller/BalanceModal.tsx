@@ -51,8 +51,8 @@ export function BalanceModal({
   }
 
   return (
-    <div className="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div className="modal-content bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+    <div className="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
+      <div className="modal-content bg-white rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">

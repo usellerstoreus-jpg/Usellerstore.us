@@ -103,27 +103,27 @@ export function DashboardView({
   return (
     <div className="dashboard-content-wrap space-y-6">
       {/* Top Banner with Store Link & Quick Status */}
-      <div className="prototype-bar flex flex-wrap justify-between items-center gap-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-        <div className="flex items-center gap-2">
-          <span className="flex h-2 w-2 relative">
+      <div className="prototype-bar flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <span className="flex h-2 w-2 relative shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          <span className="text-slate-700 font-bold tracking-normal normal-case">
+          <span className="text-slate-700 font-bold tracking-normal normal-case shrink-0">
             Storefront Live · {profile.shopName}
           </span>
-          <span className="text-slate-300">|</span>
-          <span className="text-slate-500 lowercase">{storefrontUrl}</span>
+          <span className="text-slate-300 hidden sm:inline">|</span>
+          <span className="text-slate-500 lowercase truncate max-w-[170px] sm:max-w-xs">{storefrontUrl}</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:border-blue-300 transition-all font-medium text-xs normal-case shadow-xs"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:border-blue-300 transition-all font-medium text-xs normal-case shadow-xs cursor-pointer"
             onClick={handleCopyLink}
           >
             {copiedUrl ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
-            <span>{copiedUrl ? 'Copied Link' : 'Copy Store Link'}</span>
+            <span>{copiedUrl ? 'Copied' : 'Copy Link'}</span>
           </button>
           <button
             type="button"
@@ -136,41 +136,39 @@ export function DashboardView({
       </div>
 
       {/* Hero Cockpit Banner */}
-      <section className="welcome-hero relative overflow-hidden rounded-2xl p-6 text-white shadow-xl">
+      <section className="welcome-hero relative overflow-hidden rounded-2xl p-4 sm:p-6 text-white shadow-xl">
         <div className="hero-glow-blob" />
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 sm:gap-6">
           {/* Left Store Details */}
-          <div className="welcome-person flex items-center gap-4">
-            <div className="avatar hero-avatar relative">
+          <div className="welcome-person flex items-center gap-3 sm:gap-4">
+            <div className="avatar hero-avatar relative shrink-0 w-14 h-14 sm:w-16 sm:h-16 text-xl sm:text-2xl rounded-2xl">
               {profile.avatarLetter}
               <span className="online-dot" />
             </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="eyebrow uppercase text-cyan-300 font-semibold text-[11px] tracking-wider">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                <span className="eyebrow uppercase text-cyan-300 font-semibold text-[10px] sm:text-[11px] tracking-wider">
                   OFFICIAL MERCHANT COCKPIT
                 </span>
-                <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  <ShieldCheck size={11} /> VERIFIED SELLER
+                <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full">
+                  <ShieldCheck size={10} /> VERIFIED
                 </span>
               </div>
-              <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-white m-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-white m-0 truncate">
                 {profile.shopName}
               </h1>
-              <p className="text-slate-300 text-xs mt-1 flex items-center gap-2">
+              <p className="text-slate-300 text-xs mt-1 flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <span>Owner: <b className="text-white">{profile.ownerName}</b></span>
                 <span>•</span>
-                <span className="text-amber-300">★ {profile.rating.toFixed(1)}</span>
-                <span>•</span>
-                <span>{orders.length} total orders</span>
-                <span>•</span>
-                <span>Member since {profile.memberSince}</span>
+                <span className="text-amber-300 font-medium">★ {profile.rating.toFixed(1)}</span>
+                <span className="hidden sm:inline">•</span>
+                <span className="hidden sm:inline">{orders.length} orders</span>
               </p>
             </div>
           </div>
 
           {/* Center Balances */}
-          <div className="hero-balances flex items-center gap-4 bg-white/10 backdrop-blur-md px-5 py-3.5 rounded-xl border border-white/15">
+          <div className="hero-balances flex items-center justify-around sm:justify-start gap-3 sm:gap-4 bg-white/10 backdrop-blur-md px-4 sm:px-5 py-3 rounded-xl border border-white/15 w-full sm:w-auto">
             <div
               className="cursor-pointer transition-transform hover:scale-105"
               onClick={onOpenBalanceModal}
@@ -179,7 +177,7 @@ export function DashboardView({
               <span className="text-[10px] tracking-wider uppercase text-cyan-200 block mb-0.5">
                 AVAILABLE BALANCE
               </span>
-              <strong className="text-2xl font-black text-white block">
+              <strong className="text-xl sm:text-2xl font-black text-white block">
                 ${profile.balance.toFixed(2)}
               </strong>
             </div>
@@ -188,17 +186,17 @@ export function DashboardView({
               <span className="text-[10px] tracking-wider uppercase text-slate-300 block mb-0.5">
                 GUARANTEE POOL
               </span>
-              <strong className="text-2xl font-black text-emerald-300 block">
+              <strong className="text-xl sm:text-2xl font-black text-emerald-300 block">
                 ${profile.guarantee.toFixed(2)}
               </strong>
             </div>
           </div>
 
           {/* Right Action Shortcuts */}
-          <div className="hero-actions flex items-center gap-2.5 flex-wrap">
+          <div className="hero-actions grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
             <button
               type="button"
-              className="hero-btn-primary"
+              className="hero-btn-primary justify-center text-center text-xs sm:text-sm py-2 sm:py-2.5"
               onClick={() => onNavigate('Products')}
             >
               <Plus size={16} /> Add Product
@@ -206,7 +204,7 @@ export function DashboardView({
             {onCreateDemoOrder && (
               <button
                 type="button"
-                className="hero-btn-secondary"
+                className="hero-btn-secondary justify-center text-center text-xs sm:text-sm py-2 sm:py-2.5"
                 onClick={onCreateDemoOrder}
                 title="Create a live demo order to see real-time revenue increase"
               >
@@ -215,7 +213,7 @@ export function DashboardView({
             )}
             <button
               type="button"
-              className="hero-btn-accent"
+              className="hero-btn-accent justify-center text-center text-xs sm:text-sm py-2 sm:py-2.5 col-span-2 sm:col-span-1"
               onClick={onOpenBalanceModal}
             >
               <ArrowUpRight size={16} /> Withdraw
@@ -372,6 +370,7 @@ export function DashboardView({
                     className="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer relative"
                     onMouseEnter={() => setHoveredBar(index)}
                     onMouseLeave={() => setHoveredBar(null)}
+                    onTouchStart={() => setHoveredBar(hoveredBar === index ? null : index)}
                   >
                     {/* Hover Floating Tooltip */}
                     {isHovered && (
@@ -501,8 +500,8 @@ export function DashboardView({
               <p className="text-xs">Click &quot;Test Order&quot; in the hero above to simulate an incoming customer order.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto -mx-2 sm:mx-0">
+              <table className="w-full text-left text-xs min-w-[520px]">
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-400 uppercase tracking-wider font-semibold">
                     <th className="pb-3 font-semibold">Order</th>

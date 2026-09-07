@@ -50,14 +50,14 @@ export function OrdersView({
   return (
     <div className="orders-view-container">
       {/* Top Filter Status Pill Bar */}
-      <div className="orders-filter-bar flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none">
+      <div className="orders-filter-bar flex items-center gap-2 overflow-x-auto pb-3 mb-6 scrollbar-none -mx-2 px-2 sm:mx-0 sm:px-0">
         {statusTabs.map((tab) => {
           const isActive = activeFilter === tab.id
           return (
             <button
               key={tab.id}
               type="button"
-              className={`filter-pill flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`filter-pill flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 isActive
                   ? 'bg-slate-200 text-slate-800 shadow-xs ring-1 ring-slate-300'
                   : 'bg-white hover:bg-slate-50 text-slate-600 border border-slate-200'
@@ -73,7 +73,7 @@ export function OrdersView({
 
       {/* Main Content Area */}
       {filteredOrders.length === 0 ? (
-        <div className="empty-orders-panel bg-white border border-slate-200/90 rounded-2xl min-h-[440px] flex flex-col items-center justify-center p-8 text-center shadow-xs">
+        <div className="empty-orders-panel bg-white border border-slate-200/90 rounded-2xl min-h-[440px] flex flex-col items-center justify-center p-6 sm:p-8 text-center shadow-xs">
           {/* Clipboard Icon */}
           <div className="w-14 h-14 rounded-2xl bg-[#eef3f8] text-[#557291] flex items-center justify-center mb-5">
             <ClipboardList size={28} strokeWidth={1.8} />
@@ -89,7 +89,7 @@ export function OrdersView({
           {onCreateDemoOrder && (
             <button
               type="button"
-              className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-all"
+              className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer"
               onClick={() => {
                 onCreateDemoOrder()
                 onToast('Simulated order assigned to your store!')
@@ -105,9 +105,9 @@ export function OrdersView({
           {filteredOrders.map((order) => (
             <div
               key={order.id}
-              className="order-card bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all"
+              className="order-card bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all"
             >
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 sm:gap-4">
                 <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
                   <Package size={24} />
                 </div>
@@ -121,8 +121,8 @@ export function OrdersView({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between md:justify-end gap-5">
-                <div className="text-right">
+              <div className="flex items-center justify-between sm:justify-end gap-5 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
+                <div className="text-left sm:text-right">
                   <span className="text-xs text-slate-400 block">Total</span>
                   <strong className="text-base font-bold text-slate-900">${order.totalAmount.toFixed(2)}</strong>
                   <span className="text-xs font-semibold text-emerald-600 block">Profit +${order.profit.toFixed(2)}</span>
@@ -131,7 +131,7 @@ export function OrdersView({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    className="p-2 text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-xl border border-slate-200"
+                    className="p-2 text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-xl border border-slate-200 cursor-pointer"
                     onClick={() => setSelectedOrder(order)}
                     title="View Order Details"
                   >
@@ -146,8 +146,8 @@ export function OrdersView({
 
       {/* Order Detail Modal */}
       {selectedOrder && (
-        <div className="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="modal-content bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+        <div className="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="modal-content bg-white rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
               <div>
                 <h3 className="font-bold text-lg text-slate-900">{selectedOrder.orderNumber}</h3>
