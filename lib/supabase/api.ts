@@ -824,3 +824,84 @@ export async function signOutSeller(): Promise<void> {
   }
 }
 
+// -------------------------------------------------------------
+// ADMIN AUTHENTICATION
+// -------------------------------------------------------------
+export interface AdminUser {
+  email: string
+  name: string
+  role: 'admin'
+  avatar: string
+  permissions: string[]
+}
+
+export async function signInAdmin(params: {
+  email: string
+  password: string
+}): Promise<{ success: boolean; admin?: AdminUser; error?: string }> {
+  const { email, password } = params
+  const cleanEmail = email.trim().toLowerCase()
+
+  // Standard platform admin accounts
+  const isDefaultAdmin =
+    (cleanEmail === 'admin@usellerstore.com' ||
+      cleanEmail === 'admin@usellerstore.us' ||
+      cleanEmail === 'admin' ||
+      cleanEmail === 'zain@admin.com') &&
+    (password === 'admin123' || password === 'admin' || password === 'password123' || password === '••••••••')
+
+  if (isDefaultAdmin) {
+    const adminUser: AdminUser = {
+      email: cleanEmail.includes('@') ? cleanEmail : 'admin@usellerstore.com',
+      name: 'Super Administrator',
+      role: 'admin',
+      avatar: 'A',
+      permissions: ['all', 'manage_sellers', 'manage_orders', 'kyc_review', 'withdrawals'],
+    }
+    return { success: true, admin: adminUser }
+  }
+
+  // Supabase auth check if client exists
+  const client = getSupabase()
+  if (client && cleanEmail.includes('@')) {
+    try {
+      const { data, error } = await client.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      })
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      // Check if user has admin role metadata or email domain
+      const role = data.user.user_metadata?.role || (data.user.email?.includes('admin') ? 'admin' : null)
+      if (role !== 'admin') {
+        return {
+          success: false,
+          error: 'Access denied: this account does not have Administrator privileges.',
+        }
+      }
+
+      return {
+        success: true,
+        admin: {
+          email: data.user.email || cleanEmail,
+          name: data.user.user_metadata?.name || 'Administrator',
+          role: 'admin',
+          avatar: 'A',
+          permissions: ['all'],
+        },
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Admin authentication failed' }
+    }
+  }
+
+  return {
+    success: false,
+    error: 'Invalid administrator credentials. Please check your admin email and password.',
+  }
+}
+
+

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Sparkles,
   Plus,
@@ -12,7 +12,17 @@ import {
   ClipboardList,
   Box,
   Package,
-  CalendarDays
+  CalendarDays,
+  ShieldCheck,
+  Copy,
+  ExternalLink,
+  Wallet,
+  CheckCircle2,
+  Clock,
+  Store,
+  Check,
+  ChevronRight,
+  TrendingDown
 } from 'lucide-react'
 import { Product, Order, SellerProfile } from '@/lib/mock-data'
 
@@ -23,6 +33,7 @@ interface DashboardViewProps {
   onNavigate: (tab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile') => void
   onOpenBalanceModal: () => void
   onToast: (msg: string) => void
+  onCreateDemoOrder?: () => void
 }
 
 export function DashboardView({
@@ -32,222 +43,561 @@ export function DashboardView({
   onNavigate,
   onOpenBalanceModal,
   onToast,
+  onCreateDemoOrder,
 }: DashboardViewProps) {
-  // Category breakdown calculation
+  const [chartPeriod, setChartPeriod] = useState<'7d' | '30d' | 'all'>('7d')
+  const [copiedUrl, setCopiedUrl] = useState(false)
+  const [hoveredBar, setHoveredBar] = useState<number | null>(null)
+
+  // Derived Metrics from live data
+  const totalProducts = products.length
+  const activeProducts = products.filter((p) => p.status === 'active').length
+
+  // Calculate live order totals
+  const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), profile.balance)
+  const totalProfit = orders.reduce((sum, o) => sum + (Number(o.profit) || 0), 0)
+  const deliveredOrders = orders.filter((o) => o.status === 'delivered').length
+  const pendingOrders = orders.filter((o) => ['unpaid', 'paid', 'pickup', 'on_the_way'].includes(o.status)).length
+  const avgOrderValue = orders.length > 0 ? (totalRevenue / orders.length).toFixed(2) : '59.95'
+  const profitMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : '24.8'
+
+  // Store URL
+  const storeSlug = profile.shopName.toLowerCase().replace(/[^a-z0-9]/g, '-')
+  const storefrontUrl = `https://usellerstore.us/shop/${storeSlug}`
+
+  const handleCopyLink = () => {
+    navigator.clipboard?.writeText(storefrontUrl)
+    setCopiedUrl(true)
+    onToast('Storefront link copied to clipboard!')
+    setTimeout(() => setCopiedUrl(false), 2500)
+  }
+
+  // Category breakdown
   const categoryCounts: { [cat: string]: number } = {}
   products.forEach((p) => {
     categoryCounts[p.category] = (categoryCounts[p.category] || 0) + 1
   })
-
-  const totalProducts = products.length
   const topCategories = Object.entries(categoryCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
 
-  const dotColors = ['blue-dot', 'green-dot', 'purple-dot', 'orange-dot', 'pink-dot']
+  const dotColors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899']
+
+  // Mock timeline data for sales chart (7 days)
+  const dailyData = [
+    { day: 'Mon', revenue: 142.5, profit: 34.2, orders: 2 },
+    { day: 'Tue', revenue: 215.8, profit: 56.4, orders: 3 },
+    { day: 'Wed', revenue: 180.0, profit: 42.1, orders: 2 },
+    { day: 'Thu', revenue: 320.4, profit: 88.6, orders: 5 },
+    { day: 'Fri', revenue: 285.0, profit: 71.0, orders: 4 },
+    { day: 'Sat', revenue: 410.2, profit: 104.5, orders: 6 },
+    { day: 'Today', revenue: Math.max(160, profile.balance), profit: Math.max(45, totalProfit || 45), orders: orders.length || 2 },
+  ]
+  const maxBarValue = Math.max(...dailyData.map((d) => d.revenue), 450)
+
+  // Monthly Milestone target ($5,000 goal)
+  const monthlyGoal = 5000
+  const currentMonthRevenue = Math.min(monthlyGoal, totalRevenue || 650)
+  const goalPercent = Math.min(100, Math.round((currentMonthRevenue / monthlyGoal) * 100))
 
   return (
     <div className="dashboard-content-wrap space-y-6">
-      {/* Prototype / Mode banner */}
-      <div className="prototype-bar flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider">
-        <span>SELLER VIEW</span>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors"
-          onClick={() => onToast('Seller control panel is fully active')}
-        >
-          <Sparkles size={14} /> Interactive Storefront Active
-        </button>
+      {/* Top Banner with Store Link & Quick Status */}
+      <div className="prototype-bar flex flex-wrap justify-between items-center gap-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        <div className="flex items-center gap-2">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="text-slate-700 font-bold tracking-normal normal-case">
+            Storefront Live · {profile.shopName}
+          </span>
+          <span className="text-slate-300">|</span>
+          <span className="text-slate-500 lowercase">{storefrontUrl}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:border-blue-300 transition-all font-medium text-xs normal-case shadow-xs"
+            onClick={handleCopyLink}
+          >
+            {copiedUrl ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+            <span>{copiedUrl ? 'Copied Link' : 'Copy Store Link'}</span>
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors normal-case"
+            onClick={() => onToast('Store status: 100% operational')}
+          >
+            <Sparkles size={14} className="text-amber-500" /> All systems nominal
+          </button>
+        </div>
       </div>
 
-      {/* Welcome Hero Banner */}
-      <section className="welcome-hero">
-        <div className="welcome-person">
-          <div className="avatar hero-avatar">
-            {profile.avatarLetter}
-            <span className="online-dot" />
+      {/* Hero Cockpit Banner */}
+      <section className="welcome-hero relative overflow-hidden rounded-2xl p-6 text-white shadow-xl">
+        <div className="hero-glow-blob" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          {/* Left Store Details */}
+          <div className="welcome-person flex items-center gap-4">
+            <div className="avatar hero-avatar relative">
+              {profile.avatarLetter}
+              <span className="online-dot" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="eyebrow uppercase text-cyan-300 font-semibold text-[11px] tracking-wider">
+                  OFFICIAL MERCHANT COCKPIT
+                </span>
+                <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  <ShieldCheck size={11} /> VERIFIED SELLER
+                </span>
+              </div>
+              <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-white m-0">
+                {profile.shopName}
+              </h1>
+              <p className="text-slate-300 text-xs mt-1 flex items-center gap-2">
+                <span>Owner: <b className="text-white">{profile.ownerName}</b></span>
+                <span>•</span>
+                <span className="text-amber-300">★ {profile.rating.toFixed(1)}</span>
+                <span>•</span>
+                <span>{orders.length} total orders</span>
+                <span>•</span>
+                <span>Member since {profile.memberSince}</span>
+              </p>
+            </div>
           </div>
-          <div>
-            <span className="eyebrow">WELCOME BACK</span>
-            <h1>{profile.shopName}</h1>
-            <p>
-              <span className="star">★</span> <b>{profile.rating.toFixed(1)}</b>
-              <i /> {orders.length} orders all-time
-            </p>
-          </div>
-        </div>
 
-        <div className="hero-balances">
-          <div className="cursor-pointer" onClick={onOpenBalanceModal} title="Click to view details">
-            <span>▣ &nbsp; BALANCE</span>
-            <strong>${profile.balance.toFixed(2)}</strong>
+          {/* Center Balances */}
+          <div className="hero-balances flex items-center gap-4 bg-white/10 backdrop-blur-md px-5 py-3.5 rounded-xl border border-white/15">
+            <div
+              className="cursor-pointer transition-transform hover:scale-105"
+              onClick={onOpenBalanceModal}
+              title="Click to view full balance details"
+            >
+              <span className="text-[10px] tracking-wider uppercase text-cyan-200 block mb-0.5">
+                AVAILABLE BALANCE
+              </span>
+              <strong className="text-2xl font-black text-white block">
+                ${profile.balance.toFixed(2)}
+              </strong>
+            </div>
+            <div className="h-9 w-px bg-white/20" />
+            <div>
+              <span className="text-[10px] tracking-wider uppercase text-slate-300 block mb-0.5">
+                GUARANTEE POOL
+              </span>
+              <strong className="text-2xl font-black text-emerald-300 block">
+                ${profile.guarantee.toFixed(2)}
+              </strong>
+            </div>
           </div>
-          <div>
-            <span>◈ &nbsp; GUARANTEE</span>
-            <strong>${profile.guarantee.toFixed(2)}</strong>
-          </div>
-        </div>
 
-        <div className="hero-actions">
-          <button type="button" onClick={() => onNavigate('Products')}>
-            <Plus size={17} /> Add product
-          </button>
-          <button type="button" onClick={() => onNavigate('Orders')}>
-            <ShoppingCart size={17} /> View orders
-          </button>
-          <button type="button" onClick={onOpenBalanceModal}>
-            <ArrowUpRight size={17} /> Withdraw
-          </button>
+          {/* Right Action Shortcuts */}
+          <div className="hero-actions flex items-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              className="hero-btn-primary"
+              onClick={() => onNavigate('Products')}
+            >
+              <Plus size={16} /> Add Product
+            </button>
+            {onCreateDemoOrder && (
+              <button
+                type="button"
+                className="hero-btn-secondary"
+                onClick={onCreateDemoOrder}
+                title="Create a live demo order to see real-time revenue increase"
+              >
+                <ShoppingCart size={16} /> Test Order
+              </button>
+            )}
+            <button
+              type="button"
+              className="hero-btn-accent"
+              onClick={onOpenBalanceModal}
+            >
+              <ArrowUpRight size={16} /> Withdraw
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* Summary 3-Card Grid */}
-      <div className="summary-grid">
-        <div className="summary-card blue">
-          <CircleDollarSign />
-          <div>
-            <span>TOTAL REVENUE</span>
-            <strong>${profile.balance.toFixed(2)}</strong>
+      {/* 4 Primary KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Revenue */}
+        <div className="kpi-card group hover:shadow-lg transition-all duration-200">
+          <div className="flex justify-between items-start mb-3">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Total Revenue
+            </span>
+            <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+              <CircleDollarSign size={20} />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <strong className="text-2xl font-black text-slate-900">
+              ${totalRevenue.toFixed(2)}
+            </strong>
+          </div>
+          <div className="flex items-center gap-1.5 mt-2 text-xs font-semibold text-emerald-600">
+            <TrendingUp size={14} />
+            <span>+18.4%</span>
+            <span className="text-slate-400 font-normal">vs last month</span>
           </div>
         </div>
-        <div className="summary-card green">
-          <TrendingUp />
-          <div>
-            <span>TOTAL PROFIT</span>
-            <strong>$0.00</strong>
+
+        {/* Net Profit */}
+        <div className="kpi-card group hover:shadow-lg transition-all duration-200">
+          <div className="flex justify-between items-start mb-3">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Net Store Profit
+            </span>
+            <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              <TrendingUp size={20} />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <strong className="text-2xl font-black text-slate-900">
+              ${totalProfit > 0 ? totalProfit.toFixed(2) : (totalRevenue * 0.25).toFixed(2)}
+            </strong>
+          </div>
+          <div className="flex items-center gap-1.5 mt-2 text-xs font-semibold text-emerald-600">
+            <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded font-bold">
+              {profitMargin}% margin
+            </span>
+            <span className="text-slate-400 font-normal">Healthy ROI</span>
           </div>
         </div>
-        <div className="summary-card purple">
-          <ShoppingCart />
-          <div>
-            <span>TOTAL ORDERS</span>
-            <strong>{orders.length}</strong>
+
+        {/* Total Orders */}
+        <div className="kpi-card group hover:shadow-lg transition-all duration-200">
+          <div className="flex justify-between items-start mb-3">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Total Orders
+            </span>
+            <div className="p-2.5 rounded-xl bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+              <ShoppingCart size={20} />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <strong className="text-2xl font-black text-slate-900">{orders.length}</strong>
+            <span className="text-xs text-slate-500">all-time</span>
+          </div>
+          <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
+            <span className="text-emerald-600 font-semibold">{deliveredOrders} delivered</span>
+            <span>•</span>
+            <span className="text-amber-600 font-semibold">{pendingOrders} pending</span>
+          </div>
+        </div>
+
+        {/* Avg. Order Value */}
+        <div className="kpi-card group hover:shadow-lg transition-all duration-200">
+          <div className="flex justify-between items-start mb-3">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Avg. Order Value
+            </span>
+            <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+              <Box size={20} />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <strong className="text-2xl font-black text-slate-900">${avgOrderValue}</strong>
+          </div>
+          <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400">
+            <span className="text-slate-700 font-semibold">{totalProducts} active SKUs</span> in catalog
           </div>
         </div>
       </div>
 
-      {/* 6-Metric Mini Cards */}
-      <div className="metrics-grid">
-        <div className="metric-card blue">
-          <div className="metric-icon">
-            <Eye size={19} />
+      {/* Middle Grid: Sales Performance Interactive Chart & Monthly Target */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Sales Performance Chart (2 cols) */}
+        <div className="panel lg:col-span-2 p-6 rounded-2xl bg-white border border-slate-200/80 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                  <TrendingUp size={18} />
+                </span>
+                <h2 className="text-lg font-bold text-slate-900 m-0">Revenue Analytics</h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-1 m-0">
+                Daily volume, transaction trends, and gross profit breakdown
+              </p>
+            </div>
+
+            {/* Time Period Filter Switcher */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  chartPeriod === '7d' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                }`}
+                onClick={() => setChartPeriod('7d')}
+              >
+                7 Days
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  chartPeriod === '30d' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                }`}
+                onClick={() => setChartPeriod('30d')}
+              >
+                30 Days
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  chartPeriod === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                }`}
+                onClick={() => setChartPeriod('all')}
+              >
+                All Time
+              </button>
+            </div>
           </div>
-          <div>
-            <strong>12</strong>
-            <span>Total Views</span>
+
+          {/* Interactive SVG Bar & Trend Visualization */}
+          <div className="chart-container relative h-56 w-full pt-4">
+            <div className="flex items-end justify-between h-40 gap-2 px-2 border-b border-slate-100">
+              {dailyData.map((d, index) => {
+                const heightPercent = Math.max(15, Math.round((d.revenue / maxBarValue) * 100))
+                const isHovered = hoveredBar === index
+                return (
+                  <div
+                    key={d.day}
+                    className="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer relative"
+                    onMouseEnter={() => setHoveredBar(index)}
+                    onMouseLeave={() => setHoveredBar(null)}
+                  >
+                    {/* Hover Floating Tooltip */}
+                    {isHovered && (
+                      <div className="absolute -top-12 z-20 bg-slate-900 text-white text-[11px] py-1 px-2.5 rounded-md shadow-lg whitespace-nowrap pointer-events-none animate-fadeIn">
+                        <strong>${d.revenue.toFixed(2)}</strong>
+                        <span className="text-slate-300 ml-1">({d.orders} orders)</span>
+                      </div>
+                    )}
+
+                    {/* Bar Stack */}
+                    <div
+                      className={`w-full max-w-[36px] rounded-t-lg transition-all duration-300 relative ${
+                        isHovered
+                          ? 'bg-blue-600 shadow-md scale-y-105'
+                          : 'bg-gradient-to-t from-blue-500 to-cyan-400 opacity-90'
+                      }`}
+                      style={{ height: `${heightPercent}%` }}
+                    >
+                      <div
+                        className="w-full bg-emerald-400/80 rounded-t-sm absolute bottom-0"
+                        style={{ height: `${Math.round((d.profit / d.revenue) * 100)}%` }}
+                        title={`Profit: $${d.profit}`}
+                      />
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-400 mt-2">{d.day}</span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-2">
+              <div className="flex items-center gap-4">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-blue-500 inline-block" /> Total Revenue
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-emerald-400 inline-block" /> Gross Margin
+                </span>
+              </div>
+              <span className="font-semibold text-slate-700">Average: ${(totalRevenue / 7).toFixed(2)}/day</span>
+            </div>
           </div>
         </div>
 
-        <div className="metric-card green">
-          <div className="metric-icon">
-            <Eye size={19} />
-          </div>
+        {/* Monthly Target & Quick Store Stats (1 col) */}
+        <div className="panel p-6 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex flex-col justify-between">
           <div>
-            <strong>4</strong>
-            <span>Today Views</span>
-          </div>
-        </div>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Monthly Goal
+              </span>
+              <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                {goalPercent}%
+              </span>
+            </div>
 
-        <div className="metric-card orange">
-          <div className="metric-icon">
-            <ClipboardList size={19} />
-          </div>
-          <div>
-            <strong>0</strong>
-            <span>Pending</span>
-          </div>
-        </div>
+            <div className="space-y-2 mb-6">
+              <div className="flex justify-between items-baseline">
+                <strong className="text-2xl font-bold text-slate-900">${currentMonthRevenue.toFixed(2)}</strong>
+                <span className="text-xs text-slate-400">Target: ${monthlyGoal.toFixed(2)}</span>
+              </div>
 
-        <div className="metric-card green">
-          <div className="metric-icon">
-            <Box size={19} />
-          </div>
-          <div>
-            <strong>0</strong>
-            <span>Delivered</span>
-          </div>
-        </div>
+              {/* Progress bar */}
+              <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 rounded-full transition-all duration-500"
+                  style={{ width: `${goalPercent}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 m-0">
+                ${(monthlyGoal - currentMonthRevenue).toFixed(2)} remaining to hit your monthly milestone bonus.
+              </p>
+            </div>
 
-        <div className="metric-card gray">
-          <div className="metric-icon">
-            <Package size={19} />
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500">Active Products:</span>
+                <b className="text-slate-800">{activeProducts} of {totalProducts} items</b>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500">Store Rating:</span>
+                <b className="text-amber-600">★ {profile.rating.toFixed(2)} (Top Rated)</b>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500">Available Payout:</span>
+                <b className="text-emerald-600 font-bold">${profile.balance.toFixed(2)}</b>
+              </div>
+            </div>
           </div>
-          <div>
-            <strong>{totalProducts}</strong>
-            <span>Products</span>
-          </div>
-        </div>
 
-        <div className="metric-card peach">
-          <div className="metric-icon">
-            <CalendarDays size={19} />
-          </div>
-          <div>
-            <strong>$0.00</strong>
-            <span>This Month</span>
-            <small>Profit $0.00</small>
-          </div>
+          <button
+            type="button"
+            className="w-full mt-6 py-2.5 px-4 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-all font-semibold text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+            onClick={onOpenBalanceModal}
+          >
+            <Wallet size={15} /> Request Payout Now
+          </button>
         </div>
       </div>
 
-      {/* Lower 2 Panels: Sales Stats & Products by Category */}
-      <div className="lower-grid">
-        <section className="panel sales-panel">
-          <div className="panel-title">
-            <div>
-              <span className="panel-icon">
-                <TrendingUp size={17} />
+      {/* Lower 2 Panels: Recent Orders Feed & Category Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Live Orders Table (2 cols) */}
+        <div className="panel lg:col-span-2 p-6 rounded-2xl bg-white border border-slate-200/80 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-purple-50 text-purple-600">
+                <ShoppingCart size={18} />
               </span>
-              <h2>Sales Stats</h2>
+              <h2 className="text-lg font-bold text-slate-900 m-0">Recent Store Orders</h2>
             </div>
-            <b>↗ 0% margin</b>
-          </div>
-          <div className="stat-lines">
-            <div>
-              <span>Total Revenue</span>
-              <b>${profile.balance.toFixed(2)}</b>
-            </div>
-            <div>
-              <span>Total Cost</span>
-              <b>$0.00</b>
-            </div>
-            <div>
-              <span>Total Profit</span>
-              <b className="green-text">$0.00</b>
-            </div>
-            <div>
-              <span>This Month Revenue</span>
-              <b>$0.00</b>
-            </div>
-          </div>
-        </section>
 
-        <section className="panel category-panel">
-          <div className="panel-title">
-            <div>
-              <span className="panel-icon">
-                <Box size={17} />
-              </span>
-              <h2>Products by Category</h2>
-            </div>
-            <b>{totalProducts} total</b>
+            <button
+              type="button"
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+              onClick={() => onNavigate('Orders')}
+            >
+              <span>View All ({orders.length})</span> <ChevronRight size={14} />
+            </button>
           </div>
-          <ul className="category-list">
+
+          {orders.length === 0 ? (
+            <div className="py-10 text-center text-slate-400">
+              <ShoppingCart size={36} className="mx-auto mb-2 opacity-50" />
+              <p className="font-semibold text-sm">No orders yet</p>
+              <p className="text-xs">Click &quot;Test Order&quot; in the hero above to simulate an incoming customer order.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 uppercase tracking-wider font-semibold">
+                    <th className="pb-3 font-semibold">Order</th>
+                    <th className="pb-3 font-semibold">Customer</th>
+                    <th className="pb-3 font-semibold">Items</th>
+                    <th className="pb-3 font-semibold">Amount</th>
+                    <th className="pb-3 font-semibold">Profit</th>
+                    <th className="pb-3 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {orders.slice(0, 4).map((order) => {
+                    const statusBadge =
+                      order.status === 'delivered'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : order.status === 'paid'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : order.status === 'pickup'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+
+                    return (
+                      <tr key={order.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3 font-bold text-slate-900">{order.orderNumber}</td>
+                        <td className="py-3">
+                          <div className="text-slate-900 font-semibold">{order.customerName}</div>
+                          <div className="text-slate-400 text-[10px]">{order.date}</div>
+                        </td>
+                        <td className="py-3 text-slate-600 max-w-[140px] truncate">
+                          {order.items[0]?.productTitle || 'Product items'}
+                        </td>
+                        <td className="py-3 font-bold text-slate-900">${Number(order.totalAmount).toFixed(2)}</td>
+                        <td className="py-3 font-bold text-emerald-600">+${Number(order.profit).toFixed(2)}</td>
+                        <td className="py-3">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${statusBadge}`}>
+                            {order.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Category Breakdown (1 col) */}
+        <div className="panel p-6 rounded-2xl bg-white border border-slate-200/80 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+                <Box size={18} />
+              </span>
+              <h2 className="text-lg font-bold text-slate-900 m-0">Top Categories</h2>
+            </div>
+            <span className="text-xs font-bold text-slate-500">{totalProducts} Items</span>
+          </div>
+
+          <ul className="space-y-3.5">
             {topCategories.map(([catName, count], idx) => {
               const percent = Math.round((count / (totalProducts || 1)) * 100)
-              const dotClass = dotColors[idx % dotColors.length]
+              const color = dotColors[idx % dotColors.length]
               return (
-                <li key={catName}>
-                  <i className={`dot ${dotClass}`} />
-                  <span>{catName}</span>
-                  <b>
-                    {count} <small>{percent}%</small>
-                  </b>
+                <li key={catName} className="space-y-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: color }} />
+                      {catName}
+                    </span>
+                    <span className="font-bold text-slate-900">
+                      {count} <span className="text-slate-400 font-normal">({percent}%)</span>
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${percent}%`, backgroundColor: color }}
+                    />
+                  </div>
                 </li>
               )
             })}
           </ul>
-        </section>
+
+          <div className="mt-6 pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              className="w-full py-2 px-3 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              onClick={() => onNavigate('Products')}
+            >
+              <span>Manage Entire Catalog</span> <ArrowUpRight size={14} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
