@@ -9,6 +9,10 @@ import {
   Users,
   Search,
   LogIn,
+  UserPlus,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
   MoreVertical,
   CalendarDays,
   Store,
@@ -41,7 +45,6 @@ import { NotificationsView } from '@/components/seller/NotificationsView'
 import { ProfileView } from '@/components/seller/ProfileView'
 import { BalanceModal } from '@/components/seller/BalanceModal'
 import { SupportChatModal } from '@/components/seller/SupportChatModal'
-import { SupabaseStatusBadge } from '@/components/seller/SupabaseStatusBadge'
 import {
   fetchProducts,
   createProduct,
@@ -56,6 +59,9 @@ import {
   deleteNotification,
   fetchSellerProfile,
   updateSellerProfile,
+  signUpSeller,
+  signInSeller,
+  signOutSeller,
 } from '@/lib/supabase/api'
 import { isSupabaseConfigured } from '@/lib/supabase/client'
 
@@ -302,15 +308,111 @@ function AdminPanel({
   )
 }
 
-function Login({
-  onLogin,
+function AuthScreen({
+  onLoginSuccess,
   onAdmin,
+  onToast,
 }: {
-  onLogin: () => void
+  onLoginSuccess: (profile: SellerProfile) => void
   onAdmin: () => void
+  onToast: (msg: string) => void
 }) {
-  const [email, setEmail] = useState('zain55@gmail.com')
-  const [password, setPassword] = useState('••••••••')
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+
+  const [signInEmail, setSignInEmail] = useState('zain55@gmail.com')
+  const [signInPassword, setSignInPassword] = useState('••••••••')
+
+  const [fullName, setFullName] = useState('')
+  const [shopName, setShopName] = useState('')
+  const [signUpEmail, setSignUpEmail] = useState('')
+  const [signUpPassword, setSignUpPassword] = useState('')
+
+  const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+
+  const handleSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    if (!signInEmail.trim()) {
+      setErrorMessage('Please enter your email address')
+      return
+    }
+    if (!signInPassword) {
+      setErrorMessage('Please enter your password')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const res = await signInSeller({
+        email: signInEmail,
+        password: signInPassword,
+      })
+
+      if (res.success && res.profile) {
+        onToast(`Welcome back, ${res.profile.ownerName || res.profile.shopName}!`)
+        onLoginSuccess(res.profile)
+      } else {
+        setErrorMessage(res.error || 'Invalid credentials. Please check your email and password.')
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error signing in. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSignUp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    if (!fullName.trim()) {
+      setErrorMessage('Please enter your full name')
+      return
+    }
+    if (!shopName.trim()) {
+      setErrorMessage('Please enter your shop or store name')
+      return
+    }
+    if (!signUpEmail.trim() || !signUpEmail.includes('@')) {
+      setErrorMessage('Please enter a valid email address')
+      return
+    }
+    if (signUpPassword.length < 6) {
+      setErrorMessage('Password must be at least 6 characters')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const res = await signUpSeller({
+        email: signUpEmail,
+        password: signUpPassword,
+        shopName,
+        ownerName: fullName,
+      })
+
+      if (res.success && res.profile) {
+        if (res.needsEmailConfirmation) {
+          setSuccessMessage('Registration successful! Please check your email inbox to confirm your account.')
+          onToast('Account created! Please verify your email.')
+        } else {
+          onToast(`Store created! Welcome to U Seller Store, ${res.profile.ownerName}`)
+          onLoginSuccess(res.profile)
+        }
+      } else {
+        setErrorMessage(res.error || 'Failed to create store account. Please try again.')
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error creating account. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <main className="login-page">
@@ -332,7 +434,7 @@ function Login({
             <em>Grow your business.</em>
           </h1>
           <p>
-            Everything you need to find products, manage orders, and turn your ideas into a thriving
+            Everything you need to find products, manage orders, track payouts, and turn your ideas into a thriving
             store.
           </p>
           <div className="login-features">
@@ -343,7 +445,7 @@ function Login({
               <Check size={16} /> Simple fulfillment
             </span>
             <span>
-              <Check size={16} /> Built for growth
+              <Check size={16} /> Real-time database
             </span>
           </div>
         </div>
@@ -359,54 +461,219 @@ function Login({
         </button>
 
         <div className="login-form">
-          <div className="form-intro">
-            <span className="form-icon">
-              <LogIn size={20} />
-            </span>
-            <span className="eyebrow">WELCOME BACK</span>
-            <h2>Sign in to your store</h2>
-            <p>Enter your details to continue.</p>
-          </div>
-
-          <label>
-            Email address
-            <input
-              type="email"
-              placeholder="you@yourstore.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
-
-          <label>
-            Password
-            <input
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-
-          <div className="form-row">
-            <label className="remember">
-              <input type="checkbox" defaultChecked /> Remember me
-            </label>
-            <button type="button" className="forgot">
-              Forgot password?
+          <div className="auth-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={authMode === 'signin'}
+              className={`auth-tab-btn ${authMode === 'signin' ? 'active' : ''}`}
+              onClick={() => {
+                setAuthMode('signin')
+                setErrorMessage('')
+                setSuccessMessage('')
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={authMode === 'signup'}
+              className={`auth-tab-btn ${authMode === 'signup' ? 'active' : ''}`}
+              onClick={() => {
+                setAuthMode('signup')
+                setErrorMessage('')
+                setSuccessMessage('')
+              }}
+            >
+              Create Account
             </button>
           </div>
 
-          <button type="button" className="login-submit" onClick={onLogin}>
-            <span>Sign in</span> <ArrowUpRight size={17} />
-          </button>
+          {errorMessage && (
+            <div className="auth-error-banner" role="alert">
+              <AlertCircle size={17} className="shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
-          <p className="login-foot">
-            Demo prototype ·{' '}
-            <button type="button" onClick={onLogin}>
-              Continue as tester
-            </button>
-          </p>
+          {successMessage && (
+            <div className="auth-success-banner" role="alert">
+              <CheckCircle2 size={17} className="shrink-0" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {authMode === 'signin' ? (
+            <form onSubmit={handleSignIn}>
+              <div className="form-intro">
+                <span className="form-icon">
+                  <LogIn size={20} />
+                </span>
+                <span className="eyebrow">WELCOME BACK</span>
+                <h2>Sign in to your store</h2>
+                <p>Enter your credentials to access your merchant dashboard.</p>
+              </div>
+
+              <label>
+                Email address
+                <input
+                  type="email"
+                  placeholder="you@yourstore.com"
+                  required
+                  value={signInEmail}
+                  onChange={(e) => setSignInEmail(e.target.value)}
+                />
+              </label>
+
+              <label>
+                Password
+                <input
+                  type="password"
+                  placeholder="Enter your password"
+                  required
+                  value={signInPassword}
+                  onChange={(e) => setSignInPassword(e.target.value)}
+                />
+              </label>
+
+              <div className="form-row">
+                <label className="remember">
+                  <input type="checkbox" defaultChecked /> Remember me
+                </label>
+                <button
+                  type="button"
+                  className="forgot"
+                  onClick={() => onToast('Password reset link sent if account exists')}
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <button type="submit" className="login-submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign in</span> <ArrowUpRight size={17} />
+                  </>
+                )}
+              </button>
+
+              <p className="login-foot">
+                Don&apos;t have a store yet?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('signup')
+                    setErrorMessage('')
+                  }}
+                >
+                  Create account
+                </button>
+              </p>
+
+              <p className="login-foot" style={{ marginTop: '10px' }}>
+                Demo prototype ·{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSignInEmail('zain55@gmail.com')
+                    setSignInPassword('password123')
+                    onToast('Demo store access granted')
+                    onLoginSuccess(initialSellerProfile)
+                  }}
+                >
+                  Continue as tester
+                </button>
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={handleSignUp}>
+              <div className="form-intro">
+                <span className="form-icon" style={{ background: '#ecfdf5', color: '#059669' }}>
+                  <UserPlus size={20} />
+                </span>
+                <span className="eyebrow">START SELLING TODAY</span>
+                <h2>Create store account</h2>
+                <p>Register your merchant profile and launch your online store.</p>
+              </div>
+
+              <label>
+                Your Full Name
+                <input
+                  type="text"
+                  placeholder="e.g. Alex Miller"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+              </label>
+
+              <label>
+                Shop / Store Name
+                <input
+                  type="text"
+                  placeholder="e.g. Apex Trends Store"
+                  required
+                  value={shopName}
+                  onChange={(e) => setShopName(e.target.value)}
+                />
+              </label>
+
+              <label>
+                Email address
+                <input
+                  type="email"
+                  placeholder="alex@yourstore.com"
+                  required
+                  value={signUpEmail}
+                  onChange={(e) => setSignUpEmail(e.target.value)}
+                />
+              </label>
+
+              <label>
+                Password
+                <input
+                  type="password"
+                  placeholder="At least 6 characters"
+                  required
+                  minLength={6}
+                  value={signUpPassword}
+                  onChange={(e) => setSignUpPassword(e.target.value)}
+                />
+              </label>
+
+              <button type="submit" className="login-submit" disabled={isLoading} style={{ marginTop: '8px' }}>
+                {isLoading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Creating store...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Create Store & Account</span> <ArrowUpRight size={17} />
+                  </>
+                )}
+              </button>
+
+              <p className="login-foot">
+                Already have a store account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('signin')
+                    setErrorMessage('')
+                  }}
+                >
+                  Sign in
+                </button>
+              </p>
+            </form>
+          )}
         </div>
       </div>
     </main>
@@ -414,13 +681,12 @@ function Login({
 }
 
 export default function Page() {
-  const [mode, setMode] = useState<Mode>('seller')
+  const [mode, setMode] = useState<Mode>('login')
   const [sellerTab, setSellerTab] = useState<SellerTab>('Products')
   const [toast, setToast] = useState('')
   const [modeOpen, setModeOpen] = useState(false)
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false)
 
-  // Seller store state
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [orders, setOrders] = useState<Order[]>(initialOrders)
   const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications)
@@ -431,8 +697,16 @@ export default function Page() {
     window.setTimeout(() => setToast(''), 2800)
   }
 
-  // Load data from Supabase if configured
   const loadSupabaseData = async () => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('u_seller_active_profile')
+        if (saved) {
+          setProfile(JSON.parse(saved))
+        }
+      }
+    } catch {}
+
     if (!isSupabaseConfigured()) return
     try {
       const [supaProds, supaOrders, supaNotifs, supaProfile] = await Promise.all([
@@ -454,12 +728,28 @@ export default function Page() {
     loadSupabaseData()
   }, [])
 
-  const signOut = () => {
+  const signOut = async () => {
+    await signOutSeller()
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('u_seller_active_profile')
+      }
+    } catch {}
     setMode('login')
     showToast('You have been signed out')
   }
 
-  // Handlers for products
+  const handleAuthSuccess = (newProfile: SellerProfile) => {
+    setProfile(newProfile)
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('u_seller_active_profile', JSON.stringify(newProfile))
+      }
+    } catch {}
+    setMode('seller')
+    setSellerTab('Dashboard')
+  }
+
   const handleAddProduct = async (newProd: Omit<Product, 'id'>) => {
     const created = await createProduct(newProd)
     if (created) {
@@ -477,7 +767,6 @@ export default function Page() {
     await deleteProduct(id)
   }
 
-  // Handlers for orders
   const handleCreateDemoOrder = async () => {
     const demoOrder: Order = {
       id: 'ord-' + Date.now(),
@@ -515,7 +804,6 @@ export default function Page() {
     await updateOrderStatus(orderId, newStatus)
   }
 
-  // Handlers for notifications
   const handleMarkAsRead = async (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
     await markNotificationAsRead(id)
@@ -532,13 +820,11 @@ export default function Page() {
     await deleteNotification(id)
   }
 
-  // Handler for profile updates
   const handleUpdateProfile = async (updates: Partial<SellerProfile>) => {
     setProfile((prev) => ({ ...prev, ...updates }))
     await updateSellerProfile(updates)
   }
 
-  // Handler for withdrawals
   const handleWithdraw = async (amount: number) => {
     const newBal = Number(Math.max(0, profile.balance - amount).toFixed(2))
     setProfile((prev) => ({
@@ -552,55 +838,53 @@ export default function Page() {
 
   return (
     <>
-      {/* Top Floating Switcher for Developer / Demo Workspace switching & Supabase Status */}
-      <header className="mode-switcher flex items-center gap-2">
-        <SupabaseStatusBadge onDataRefreshed={loadSupabaseData} onToast={showToast} />
-        <button
-          type="button"
-          className="mode-trigger"
-          onClick={() => setModeOpen(!modeOpen)}
-        >
-          <span className="mode-dot" />
-          <span>U Seller Store ({mode.toUpperCase()})</span>
-          <ChevronDown size={15} />
-        </button>
-        {modeOpen && (
-          <div className="mode-menu">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('seller')
-                setModeOpen(false)
-              }}
-            >
-              Seller account
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('admin')
-                setModeOpen(false)
-              }}
-            >
-              Admin panel
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('login')
-                setModeOpen(false)
-              }}
-            >
-              Seller login
-            </button>
-          </div>
-        )}
-      </header>
+      {mode !== 'login' && (
+        <header className="mode-switcher flex items-center gap-2">
+          <button
+            type="button"
+            className="mode-trigger"
+            onClick={() => setModeOpen(!modeOpen)}
+          >
+            <span className="mode-dot" />
+            <span>U Seller Store ({mode.toUpperCase()})</span>
+            <ChevronDown size={15} />
+          </button>
+          {modeOpen && (
+            <div className="mode-menu">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('seller')
+                  setModeOpen(false)
+                }}
+              >
+                Seller account
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('admin')
+                  setModeOpen(false)
+                }}
+              >
+                Admin panel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('login')
+                  setModeOpen(false)
+                }}
+              >
+                Sign out / Switch account
+              </button>
+            </div>
+          )}
+        </header>
+      )}
 
-      {/* Main Mode View Switching */}
       {mode === 'seller' ? (
         <div className="app-shell seller-shell">
-          {/* Working Functional Sidebar */}
           <SellerSidebar
             activeTab={sellerTab}
             onSelectTab={(tab) => {
@@ -616,7 +900,6 @@ export default function Page() {
             guarantee={profile.guarantee}
           />
 
-          {/* Active Tab Main Screen */}
           <main className="seller-main">
             {sellerTab === 'Dashboard' && (
               <DashboardView
@@ -673,10 +956,8 @@ export default function Page() {
             )}
           </main>
 
-          {/* Floating Support Chat in bottom right */}
           <SupportChatModal onToast={showToast} />
 
-          {/* Balance & Withdrawal Modal */}
           <BalanceModal
             isOpen={isBalanceModalOpen}
             profile={profile}
@@ -695,17 +976,13 @@ export default function Page() {
           }}
         />
       ) : (
-        <Login
-          onLogin={() => {
-            setMode('seller')
-            setSellerTab('Products')
-            showToast('Welcome back, tester')
-          }}
+        <AuthScreen
+          onLoginSuccess={handleAuthSuccess}
           onAdmin={() => setMode('admin')}
+          onToast={showToast}
         />
       )}
 
-      {/* Global Toast */}
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
     </>
   )

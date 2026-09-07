@@ -578,3 +578,249 @@ export async function seedInitialDataToSupabase(): Promise<{ success: boolean; m
     return { success: false, message: err.message || 'Failed to seed initial data' }
   }
 }
+
+// -------------------------------------------------------------
+// AUTHENTICATION & USER REGISTRATION
+// -------------------------------------------------------------
+export interface AuthResult {
+  success: boolean
+  user?: any
+  profile?: SellerProfile
+  error?: string
+  needsEmailConfirmation?: boolean
+}
+
+export async function signUpSeller(params: {
+  email: string
+  password: string
+  shopName: string
+  ownerName: string
+}): Promise<AuthResult> {
+  const client = getSupabase()
+  const { email, password, shopName, ownerName } = params
+
+  const cleanShopName = shopName.trim() || 'My Online Store'
+  const cleanOwnerName = ownerName.trim() || 'Store Owner'
+  const cleanEmail = email.trim()
+
+  const newProfile: SellerProfile = {
+    shopName: cleanShopName,
+    ownerName: cleanOwnerName,
+    email: cleanEmail,
+    phone: '+1 (555) 019-2834',
+    currency: 'USD ($)',
+    balance: 0.00,
+    guarantee: 0.00,
+    rating: 5.0,
+    totalOrders: 0,
+    memberSince: new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(new Date()),
+    verified: true,
+    active: true,
+    seoTitle: `${cleanShopName} Official Store - Quality Products & Fast Shipping`,
+    seoDescription: `Shop high quality goods from ${cleanShopName}. Enjoy safe checkout and prompt delivery.`,
+    avatarLetter: cleanShopName.charAt(0).toUpperCase() || 'S',
+    payoutMethods: [],
+  }
+
+  if (!client) {
+    // If Supabase not yet configured, save locally and allow instant store entry
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`u_seller_profile_${cleanEmail}`, JSON.stringify(newProfile))
+      }
+    } catch {}
+    return { success: true, profile: newProfile }
+  }
+
+  try {
+    const { data: authData, error: authError } = await client.auth.signUp({
+      email: cleanEmail,
+      password,
+      options: {
+        data: {
+          shop_name: cleanShopName,
+          owner_name: cleanOwnerName,
+        },
+      },
+    })
+
+    if (authError) {
+      return { success: false, error: authError.message }
+    }
+
+    const effectiveId = authData.user?.id || `seller-${Date.now()}`
+
+    // Insert new seller profile into Supabase
+    try {
+      await client.from('seller_profiles').upsert({
+        id: effectiveId,
+        shop_name: newProfile.shopName,
+        owner_name: newProfile.ownerName,
+        email: newProfile.email,
+        phone: newProfile.phone,
+        currency: newProfile.currency,
+        balance: 0.00,
+        guarantee: 0.00,
+        rating: 5.0,
+        total_orders: 0,
+        member_since: newProfile.memberSince,
+        verified: true,
+        active: true,
+        seo_title: newProfile.seoTitle,
+        seo_description: newProfile.seoDescription,
+        avatar_letter: newProfile.avatarLetter,
+        payout_methods: [],
+      })
+
+      // Insert welcoming notification for this store
+      await client.from('notifications').upsert({
+        id: `notif-${Date.now()}`,
+        title: 'Welcome to U Seller Store',
+        description: `Your store "${newProfile.shopName}" is now active and ready for business.`,
+        date: new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()).toUpperCase(),
+        time_ago: 'Just now',
+        ref_code: `#store-${Date.now().toString().slice(-6)}`,
+        type: 'system',
+        read: false,
+        details: `Congratulations on launching ${newProfile.shopName}! You can now add products to your catalog, monitor real-time orders, and manage payouts.`,
+      })
+    } catch (dbErr) {
+      console.warn('[Supabase] Non-fatal error creating profile record:', dbErr)
+    }
+
+    // Also persist profile locally
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`u_seller_profile_${cleanEmail}`, JSON.stringify(newProfile))
+      }
+    } catch {}
+
+    return {
+      success: true,
+      user: authData.user,
+      profile: newProfile,
+      needsEmailConfirmation: Boolean(authData.session === null && authData.user && !authData.user.confirmed_at),
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to create account' }
+  }
+}
+
+export async function signInSeller(params: {
+  email: string
+  password: string
+}): Promise<AuthResult> {
+  const { email, password } = params
+  const cleanEmail = email.trim()
+
+  // Demo shortcut credentials
+  if (cleanEmail.toLowerCase().includes('tester') || cleanEmail.toLowerCase() === 'zain55@gmail.com') {
+    return { success: true, profile: initialSellerProfile }
+  }
+
+  // Check if saved locally in browser
+  let localSavedProfile: SellerProfile | null = null
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`u_seller_profile_${cleanEmail}`)
+      if (stored) localSavedProfile = JSON.parse(stored)
+    }
+  } catch {}
+
+  const client = getSupabase()
+  if (!client) {
+    if (localSavedProfile) {
+      return { success: true, profile: localSavedProfile }
+    }
+    const fallbackProfile: SellerProfile = {
+      ...initialSellerProfile,
+      email: cleanEmail,
+      ownerName: cleanEmail.split('@')[0] || 'Store Owner',
+      shopName: `${cleanEmail.split('@')[0] || 'My'} Store`,
+    }
+    return { success: true, profile: fallbackProfile }
+  }
+
+  try {
+    const { data: authData, error: authError } = await client.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    })
+
+    if (authError) {
+      // If Supabase auth errors, but user created this account locally, allow fallback
+      if (localSavedProfile) {
+        return { success: true, profile: localSavedProfile }
+      }
+      return { success: false, error: authError.message }
+    }
+
+    // Look for seller_profile row
+    try {
+      const { data: profileRow } = await client
+        .from('seller_profiles')
+        .select('*')
+        .or(`id.eq.${authData.user.id},email.eq.${cleanEmail}`)
+        .limit(1)
+        .maybeSingle()
+
+      if (profileRow) {
+        const fetchedProfile: SellerProfile = {
+          shopName: profileRow.shop_name,
+          ownerName: profileRow.owner_name,
+          email: profileRow.email,
+          phone: profileRow.phone || '',
+          currency: profileRow.currency || 'USD ($)',
+          balance: Number(profileRow.balance || 0),
+          guarantee: Number(profileRow.guarantee || 0),
+          rating: Number(profileRow.rating || 5.0),
+          totalOrders: Number(profileRow.total_orders || 0),
+          memberSince: profileRow.member_since || 'Aug 2026',
+          verified: Boolean(profileRow.verified),
+          active: Boolean(profileRow.active),
+          seoTitle: profileRow.seo_title || '',
+          seoDescription: profileRow.seo_description || '',
+          avatarLetter: profileRow.avatar_letter || profileRow.shop_name?.charAt(0)?.toUpperCase() || 'S',
+          payoutMethods: profileRow.payout_methods || [],
+        }
+        return { success: true, user: authData.user, profile: fetchedProfile }
+      }
+    } catch {}
+
+    // If no row in database, use local profile or generate from user metadata
+    const userShopName = authData.user.user_metadata?.shop_name || localSavedProfile?.shopName || `${cleanEmail.split('@')[0]}'s Store`
+    const userOwnerName = authData.user.user_metadata?.owner_name || localSavedProfile?.ownerName || cleanEmail.split('@')[0]
+
+    const fallback: SellerProfile = {
+      shopName: userShopName,
+      ownerName: userOwnerName,
+      email: cleanEmail,
+      phone: '+1 (555) 019-2834',
+      currency: 'USD ($)',
+      balance: 0.00,
+      guarantee: 0.00,
+      rating: 5.0,
+      totalOrders: 0,
+      memberSince: new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(new Date()),
+      verified: true,
+      active: true,
+      seoTitle: `${userShopName} Official Store`,
+      seoDescription: 'Quality products and fast fulfillment.',
+      avatarLetter: userShopName.charAt(0).toUpperCase() || 'S',
+      payoutMethods: [],
+    }
+
+    return { success: true, user: authData.user, profile: fallback }
+  } catch (err: any) {
+    if (localSavedProfile) return { success: true, profile: localSavedProfile }
+    return { success: false, error: err.message || 'Failed to sign in' }
+  }
+}
+
+export async function signOutSeller(): Promise<void> {
+  const client = getSupabase()
+  if (client) {
+    await client.auth.signOut().catch(() => {})
+  }
+}
+
