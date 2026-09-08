@@ -36,6 +36,9 @@ import {
   FileCheck,
   CheckCircle,
   Eye,
+  EyeOff,
+  Mail,
+  ArrowLeft,
   Box,
   Wallet,
   Menu,
@@ -81,6 +84,7 @@ import {
   signInSeller,
   signOutSeller,
   signInAdmin,
+  resetPassword,
   AdminUser,
 } from '@/lib/supabase/api'
 import { isSupabaseConfigured } from '@/lib/supabase/client'
@@ -686,22 +690,29 @@ function AuthScreen({
   // Top level role portal: 'seller' | 'admin'
   const [rolePortal, setRolePortal] = useState<'seller' | 'admin'>('seller')
 
-  // Seller sub-mode
-  const [sellerAuthMode, setSellerAuthMode] = useState<'signin' | 'signup'>('signin')
+  // Seller sub-mode: 'signin' | 'signup' | 'forgot'
+  const [sellerAuthMode, setSellerAuthMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
 
   // Seller Sign In fields
   const [signInEmail, setSignInEmail] = useState('zain55@gmail.com')
   const [signInPassword, setSignInPassword] = useState('••••••••')
+  const [showSignInPassword, setShowSignInPassword] = useState(false)
 
   // Seller Sign Up fields
   const [fullName, setFullName] = useState('')
   const [shopName, setShopName] = useState('')
   const [signUpEmail, setSignUpEmail] = useState('')
   const [signUpPassword, setSignUpPassword] = useState('')
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false)
 
   // Admin Login fields
   const [adminEmail, setAdminEmail] = useState('admin@usellerstore.com')
   const [adminPassword, setAdminPassword] = useState('admin123')
+  const [showAdminPassword, setShowAdminPassword] = useState(false)
+
+  // Password Recovery fields
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [isForgotSubmitted, setIsForgotSubmitted] = useState(false)
 
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -827,6 +838,35 @@ function AuthScreen({
     }
   }
 
+  // Password Recovery Handler
+  const handleForgotPassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    const targetEmail = (forgotEmail || signInEmail).trim()
+    if (!targetEmail || !targetEmail.includes('@')) {
+      setErrorMessage('Please enter a valid email address')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const res = await resetPassword(targetEmail)
+      if (res.success) {
+        setIsForgotSubmitted(true)
+        setSuccessMessage(res.message || `Password reset instructions sent to ${targetEmail}`)
+        onToast('Password reset link sent! Check your inbox.')
+      } else {
+        setErrorMessage(res.error || 'Failed to send reset instructions. Please try again.')
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error sending password reset email.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <main className="login-page">
       <div className="login-visual">
@@ -883,6 +923,7 @@ function AuthScreen({
                 setRolePortal('seller')
                 setErrorMessage('')
                 setSuccessMessage('')
+                if (sellerAuthMode === 'forgot') setSellerAuthMode('signin')
               }}
             >
               <Store size={14} /> Merchant Seller
@@ -910,7 +951,7 @@ function AuthScreen({
             </div>
           )}
 
-          {successMessage && (
+          {successMessage && !isForgotSubmitted && (
             <div className="auth-success-banner" role="alert">
               <CheckCircle2 size={17} className="shrink-0" />
               <span>{successMessage}</span>
@@ -920,205 +961,376 @@ function AuthScreen({
           {/* SELLER PORTAL */}
           {rolePortal === 'seller' ? (
             <>
-              {/* Seller Mode Toggle: Sign In vs Create Account */}
-              <div className="auth-tabs" role="tablist">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={sellerAuthMode === 'signin'}
-                  className={`auth-tab-btn ${sellerAuthMode === 'signin' ? 'active' : ''}`}
-                  onClick={() => {
-                    setSellerAuthMode('signin')
-                    setErrorMessage('')
-                    setSuccessMessage('')
-                  }}
-                >
-                  Sign In
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={sellerAuthMode === 'signup'}
-                  className={`auth-tab-btn ${sellerAuthMode === 'signup' ? 'active' : ''}`}
-                  onClick={() => {
-                    setSellerAuthMode('signup')
-                    setErrorMessage('')
-                    setSuccessMessage('')
-                  }}
-                >
-                  Create Account
-                </button>
-              </div>
-
-              {sellerAuthMode === 'signin' ? (
-                <form onSubmit={handleSellerSignIn}>
-                  <div className="form-intro">
-                    <span className="form-icon">
-                      <LogIn size={20} />
-                    </span>
-                    <span className="eyebrow">WELCOME BACK</span>
-                    <h2>Sign in to your store</h2>
-                    <p>Enter your credentials to access your merchant dashboard.</p>
-                  </div>
-
-                  <label>
-                    Email address
-                    <input
-                      type="email"
-                      placeholder="you@yourstore.com"
-                      required
-                      value={signInEmail}
-                      onChange={(e) => setSignInEmail(e.target.value)}
-                    />
-                  </label>
-
-                  <label>
-                    Password
-                    <input
-                      type="password"
-                      placeholder="Enter your password"
-                      required
-                      value={signInPassword}
-                      onChange={(e) => setSignInPassword(e.target.value)}
-                    />
-                  </label>
-
-                  <div className="form-row">
-                    <label className="remember">
-                      <input type="checkbox" defaultChecked /> Remember me
-                    </label>
-                    <button
-                      type="button"
-                      className="forgot"
-                      onClick={() => onToast('Password reset instructions sent')}
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-
-                  <button type="submit" className="login-submit" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 size={18} className="animate-spin" />
-                        <span>Signing in...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Sign in to Store</span> <ArrowUpRight size={17} />
-                      </>
-                    )}
+              {sellerAuthMode === 'forgot' ? (
+                /* FORGOT PASSWORD FORM */
+                <form onSubmit={handleForgotPassword}>
+                  <button
+                    type="button"
+                    className="auth-back-link"
+                    onClick={() => {
+                      setSellerAuthMode('signin')
+                      setErrorMessage('')
+                      setSuccessMessage('')
+                      setIsForgotSubmitted(false)
+                    }}
+                  >
+                    <ArrowLeft size={15} /> Back to Sign In
                   </button>
 
-                  <p className="login-foot">
-                    Don&apos;t have a store yet?{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSellerAuthMode('signup')
-                        setErrorMessage('')
-                      }}
-                    >
-                      Create account
-                    </button>
-                  </p>
+                  <div className="form-intro">
+                    <span className="form-icon" style={{ background: '#eff6ff', color: '#2563eb' }}>
+                      <KeyRound size={20} />
+                    </span>
+                    <span className="eyebrow">PASSWORD RECOVERY</span>
+                    <h2>Reset your password</h2>
+                    <p>Enter your store account email address to receive password reset instructions.</p>
+                  </div>
 
-                  <p className="login-foot" style={{ marginTop: '10px' }}>
-                    Demo prototype ·{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSignInEmail('zain55@gmail.com')
-                        setSignInPassword('password123')
-                        onToast('Demo store access granted')
-                        onLoginSuccess(initialSellerProfile)
-                      }}
-                    >
-                      Continue as tester
-                    </button>
-                  </p>
+                  {isForgotSubmitted ? (
+                    <div className="forgot-success-card">
+                      <div className="forgot-success-icon">
+                        <CheckCircle2 size={28} />
+                      </div>
+                      <h3>Check your email</h3>
+                      <p>
+                        We have dispatched instructions and a password recovery link to{' '}
+                        <strong className="text-slate-900">{forgotEmail}</strong>.
+                      </p>
+                      <div className="forgot-success-actions">
+                        <button
+                          type="button"
+                          className="login-submit"
+                          onClick={() => {
+                            setSellerAuthMode('signin')
+                            setErrorMessage('')
+                            setSuccessMessage('')
+                            setIsForgotSubmitted(false)
+                          }}
+                        >
+                          <span>Back to Sign In</span> <ArrowRight size={17} />
+                        </button>
+                        <button
+                          type="button"
+                          className="forgot-resend-btn"
+                          disabled={isLoading}
+                          onClick={handleForgotPassword}
+                        >
+                          {isLoading ? 'Resending...' : "Didn't receive email? Send again"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="auth-field-group">
+                        <label className="auth-label" htmlFor="forgot-email">Account Email Address</label>
+                        <div className="auth-input-box">
+                          <Mail size={17} className="auth-input-icon" />
+                          <input
+                            id="forgot-email"
+                            type="email"
+                            className="auth-input"
+                            placeholder="you@yourstore.com"
+                            required
+                            autoFocus
+                            autoComplete="email"
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <button type="submit" className="login-submit" disabled={isLoading} style={{ marginTop: '10px' }}>
+                        {isLoading ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" />
+                            <span>Sending recovery link...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Send Reset Instructions</span> <ArrowUpRight size={17} />
+                          </>
+                        )}
+                      </button>
+
+                      <p className="login-foot">
+                        Remember your password?{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSellerAuthMode('signin')
+                            setErrorMessage('')
+                            setSuccessMessage('')
+                          }}
+                        >
+                          Sign in here
+                        </button>
+                      </p>
+                    </>
+                  )}
                 </form>
               ) : (
-                <form onSubmit={handleSellerSignUp}>
-                  <div className="form-intro">
-                    <span className="form-icon" style={{ background: '#ecfdf5', color: '#059669' }}>
-                      <UserPlus size={20} />
-                    </span>
-                    <span className="eyebrow">START SELLING TODAY</span>
-                    <h2>Create store account</h2>
-                    <p>Register your merchant profile and launch your online store.</p>
-                  </div>
-
-                  <label>
-                    Your Full Name
-                    <input
-                      type="text"
-                      placeholder="e.g. Alex Miller"
-                      required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                    />
-                  </label>
-
-                  <label>
-                    Shop / Store Name
-                    <input
-                      type="text"
-                      placeholder="e.g. Apex Trends Store"
-                      required
-                      value={shopName}
-                      onChange={(e) => setShopName(e.target.value)}
-                    />
-                  </label>
-
-                  <label>
-                    Email address
-                    <input
-                      type="email"
-                      placeholder="alex@yourstore.com"
-                      required
-                      value={signUpEmail}
-                      onChange={(e) => setSignUpEmail(e.target.value)}
-                    />
-                  </label>
-
-                  <label>
-                    Password
-                    <input
-                      type="password"
-                      placeholder="At least 6 characters"
-                      required
-                      minLength={6}
-                      value={signUpPassword}
-                      onChange={(e) => setSignUpPassword(e.target.value)}
-                    />
-                  </label>
-
-                  <button type="submit" className="login-submit" disabled={isLoading} style={{ marginTop: '8px' }}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 size={18} className="animate-spin" />
-                        <span>Creating store...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Create Store & Account</span> <ArrowUpRight size={17} />
-                      </>
-                    )}
-                  </button>
-
-                  <p className="login-foot">
-                    Already have a store account?{' '}
+                <>
+                  {/* Seller Mode Toggle: Sign In vs Create Account */}
+                  <div className="auth-tabs" role="tablist">
                     <button
                       type="button"
+                      role="tab"
+                      aria-selected={sellerAuthMode === 'signin'}
+                      className={`auth-tab-btn ${sellerAuthMode === 'signin' ? 'active' : ''}`}
                       onClick={() => {
                         setSellerAuthMode('signin')
                         setErrorMessage('')
+                        setSuccessMessage('')
                       }}
                     >
-                      Sign in
+                      Sign In
                     </button>
-                  </p>
-                </form>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={sellerAuthMode === 'signup'}
+                      className={`auth-tab-btn ${sellerAuthMode === 'signup' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSellerAuthMode('signup')
+                        setErrorMessage('')
+                        setSuccessMessage('')
+                      }}
+                    >
+                      Create Account
+                    </button>
+                  </div>
+
+                  {sellerAuthMode === 'signin' ? (
+                    <form onSubmit={handleSellerSignIn}>
+                      <div className="form-intro">
+                        <span className="form-icon">
+                          <LogIn size={20} />
+                        </span>
+                        <span className="eyebrow">WELCOME BACK</span>
+                        <h2>Sign in to your store</h2>
+                        <p>Enter your credentials to access your merchant dashboard.</p>
+                      </div>
+
+                      <div className="auth-field-group">
+                        <label className="auth-label" htmlFor="seller-email">Email address</label>
+                        <div className="auth-input-box">
+                          <Mail size={17} className="auth-input-icon" />
+                          <input
+                            id="seller-email"
+                            type="email"
+                            className="auth-input"
+                            placeholder="you@yourstore.com"
+                            required
+                            autoComplete="email"
+                            value={signInEmail}
+                            onChange={(e) => setSignInEmail(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="auth-field-group">
+                        <label className="auth-label" htmlFor="seller-password">Password</label>
+                        <div className="auth-input-box">
+                          <Lock size={17} className="auth-input-icon" />
+                          <input
+                            id="seller-password"
+                            type={showSignInPassword ? 'text' : 'password'}
+                            className="auth-input"
+                            placeholder="Enter your password"
+                            required
+                            autoComplete="current-password"
+                            value={signInPassword}
+                            onChange={(e) => setSignInPassword(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="auth-toggle-visibility"
+                            onClick={() => setShowSignInPassword(!showSignInPassword)}
+                            aria-label={showSignInPassword ? 'Hide password' : 'Show password'}
+                            title={showSignInPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showSignInPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <label className="remember">
+                          <input type="checkbox" defaultChecked /> Remember me
+                        </label>
+                        <button
+                          type="button"
+                          className="forgot"
+                          onClick={() => {
+                            setForgotEmail(signInEmail)
+                            setIsForgotSubmitted(false)
+                            setErrorMessage('')
+                            setSuccessMessage('')
+                            setSellerAuthMode('forgot')
+                          }}
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
+
+                      <button type="submit" className="login-submit" disabled={isLoading}>
+                        {isLoading ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" />
+                            <span>Signing in...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Sign in to Store</span> <ArrowUpRight size={17} />
+                          </>
+                        )}
+                      </button>
+
+                      <p className="login-foot">
+                        Don&apos;t have a store yet?{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSellerAuthMode('signup')
+                            setErrorMessage('')
+                          }}
+                        >
+                          Create account
+                        </button>
+                      </p>
+
+                      <p className="login-foot" style={{ marginTop: '10px' }}>
+                        Demo prototype ·{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSignInEmail('zain55@gmail.com')
+                            setSignInPassword('password123')
+                            onToast('Demo store access granted')
+                            onLoginSuccess(initialSellerProfile)
+                          }}
+                        >
+                          Continue as tester
+                        </button>
+                      </p>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleSellerSignUp}>
+                      <div className="form-intro">
+                        <span className="form-icon" style={{ background: '#ecfdf5', color: '#059669' }}>
+                          <UserPlus size={20} />
+                        </span>
+                        <span className="eyebrow">START SELLING TODAY</span>
+                        <h2>Create store account</h2>
+                        <p>Register your merchant profile and launch your online store.</p>
+                      </div>
+
+                      <div className="auth-field-group">
+                        <label className="auth-label" htmlFor="signup-name">Your Full Name</label>
+                        <div className="auth-input-box">
+                          <User size={17} className="auth-input-icon" />
+                          <input
+                            id="signup-name"
+                            type="text"
+                            className="auth-input"
+                            placeholder="e.g. Alex Miller"
+                            required
+                            autoComplete="name"
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="auth-field-group">
+                        <label className="auth-label" htmlFor="signup-shop">Shop / Store Name</label>
+                        <div className="auth-input-box">
+                          <Store size={17} className="auth-input-icon" />
+                          <input
+                            id="signup-shop"
+                            type="text"
+                            className="auth-input"
+                            placeholder="e.g. Apex Trends Store"
+                            required
+                            autoComplete="organization"
+                            value={shopName}
+                            onChange={(e) => setShopName(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="auth-field-group">
+                        <label className="auth-label" htmlFor="signup-email">Email address</label>
+                        <div className="auth-input-box">
+                          <Mail size={17} className="auth-input-icon" />
+                          <input
+                            id="signup-email"
+                            type="email"
+                            className="auth-input"
+                            placeholder="alex@yourstore.com"
+                            required
+                            autoComplete="email"
+                            value={signUpEmail}
+                            onChange={(e) => setSignUpEmail(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="auth-field-group">
+                        <label className="auth-label" htmlFor="signup-password">Password</label>
+                        <div className="auth-input-box">
+                          <Lock size={17} className="auth-input-icon" />
+                          <input
+                            id="signup-password"
+                            type={showSignUpPassword ? 'text' : 'password'}
+                            className="auth-input"
+                            placeholder="At least 6 characters"
+                            required
+                            minLength={6}
+                            autoComplete="new-password"
+                            value={signUpPassword}
+                            onChange={(e) => setSignUpPassword(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="auth-toggle-visibility"
+                            onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                            aria-label={showSignUpPassword ? 'Hide password' : 'Show password'}
+                            title={showSignUpPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showSignUpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <button type="submit" className="login-submit" disabled={isLoading} style={{ marginTop: '8px' }}>
+                        {isLoading ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" />
+                            <span>Creating store...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Create Store & Account</span> <ArrowUpRight size={17} />
+                          </>
+                        )}
+                      </button>
+
+                      <p className="login-foot">
+                        Already have a store account?{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSellerAuthMode('signin')
+                            setErrorMessage('')
+                          }}
+                        >
+                          Sign in
+                        </button>
+                      </p>
+                    </form>
+                  )}
+                </>
               )}
             </>
           ) : (
@@ -1133,33 +1345,74 @@ function AuthScreen({
                 <p>Sign in with your master credentials to manage sellers and transactions.</p>
               </div>
 
-              <label>
-                Administrator Email
-                <input
-                  type="email"
-                  placeholder="admin@usellerstore.com"
-                  required
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                />
-              </label>
+              <div className="auth-field-group">
+                <label className="auth-label" htmlFor="admin-email">Administrator Email</label>
+                <div className="auth-input-box">
+                  <Mail size={17} className="auth-input-icon" />
+                  <input
+                    id="admin-email"
+                    type="email"
+                    className="auth-input"
+                    placeholder="admin@usellerstore.com"
+                    required
+                    autoComplete="email"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                  />
+                </div>
+              </div>
 
-              <label>
-                Password
-                <input
-                  type="password"
-                  placeholder="Enter administrator password"
-                  required
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                />
-              </label>
+              <div className="auth-field-group">
+                <label className="auth-label" htmlFor="admin-password">Master Password</label>
+                <div className="auth-input-box">
+                  <Lock size={17} className="auth-input-icon" />
+                  <input
+                    id="admin-password"
+                    type={showAdminPassword ? 'text' : 'password'}
+                    className="auth-input"
+                    placeholder="Enter administrator password"
+                    required
+                    autoComplete="current-password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="auth-toggle-visibility"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    aria-label={showAdminPassword ? 'Hide password' : 'Show password'}
+                    title={showAdminPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showAdminPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <label className="remember">
+                  <input type="checkbox" defaultChecked /> Remember admin session
+                </label>
+                <button
+                  type="button"
+                  className="forgot"
+                  onClick={() => {
+                    setForgotEmail(adminEmail)
+                    setIsForgotSubmitted(false)
+                    setErrorMessage('')
+                    setSuccessMessage('')
+                    setRolePortal('seller')
+                    setSellerAuthMode('forgot')
+                  }}
+                >
+                  Forgot password?
+                </button>
+              </div>
 
               <button
                 type="submit"
                 className="login-submit"
                 disabled={isLoading}
-                style={{ background: '#1e1b4b', marginTop: '14px' }}
+                style={{ background: '#1e1b4b', marginTop: '10px' }}
               >
                 {isLoading ? (
                   <>
@@ -1188,6 +1441,7 @@ function AuthScreen({
               </p>
             </form>
           )}
+
         </div>
       </div>
     </main>

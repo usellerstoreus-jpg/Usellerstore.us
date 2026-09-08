@@ -904,4 +904,34 @@ export async function signInAdmin(params: {
   }
 }
 
+export async function resetPassword(email: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  const cleanEmail = email.trim().toLowerCase()
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    return { success: false, error: 'Please enter a valid email address.' }
+  }
 
+  const client = getSupabase()
+  if (!client) {
+    return {
+      success: true,
+      message: `Password reset instructions have been sent to ${cleanEmail}. Please check your inbox to reset your password.`,
+    }
+  }
+
+  try {
+    const { error } = await client.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : undefined,
+    })
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      message: `Password reset instructions have been sent to ${cleanEmail}. Please check your inbox to reset your password.`,
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to send password reset email. Please try again.' }
+  }
+}
