@@ -74,6 +74,7 @@ import {
   fetchOrders,
   createOrder,
   updateOrderStatus,
+  deleteOrder,
   fetchNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
@@ -225,10 +226,18 @@ function AdminSidebar({
 }
 
 function AdminPanel({
+  orders,
+  onUpdateOrderStatus,
+  onDeleteOrder,
+  onCreateDemoOrder,
   onToast,
   onSignOut,
   onSwitchToSeller,
 }: {
+  orders: Order[]
+  onUpdateOrderStatus?: (orderId: string, newStatus: Order['status']) => void
+  onDeleteOrder?: (orderId: string) => void
+  onCreateDemoOrder?: () => void
   onToast: (message: string) => void
   onSignOut: () => void
   onSwitchToSeller: () => void
@@ -656,12 +665,17 @@ function AdminPanel({
 
           {active === 'Orders' && (
             <div className="panel p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-              <h2 className="text-lg font-bold text-slate-900 mb-2">Platform Orders Monitoring</h2>
-              <p className="text-xs text-slate-500 mb-4">Real-time audit log of all transactions across every merchant storefront.</p>
-              <div className="py-8 text-center text-slate-400">
-                <ShoppingBag size={36} className="mx-auto mb-2 text-blue-500" />
-                <p className="font-semibold text-slate-700 text-sm">382 total orders processed across all registered merchants.</p>
+              <div className="mb-4">
+                <h2 className="text-lg font-bold text-slate-900 m-0">Platform Orders & False Order Control</h2>
+                <p className="text-xs text-slate-500 mt-1 m-0">Review merchant transactions, cancel suspicious orders, and permanently delete false test orders.</p>
               </div>
+              <OrdersView
+                orders={orders}
+                onCreateDemoOrder={onCreateDemoOrder}
+                onUpdateOrderStatus={onUpdateOrderStatus}
+                onDeleteOrder={onDeleteOrder}
+                onToast={onToast}
+              />
             </div>
           )}
 
@@ -1587,8 +1601,54 @@ export default function Page() {
   }
 
   const handleUpdateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
+    const order = orders.find((o) => o.id === orderId)
+    if (!order) return
+
+    // If order is moved to cancelled, reverse profit from seller balance
+    if (newStatus === 'cancelled' && order.status !== 'cancelled') {
+      const profitToDeduct = Number(order.profit) || 0
+      const newBalance = Number(Math.max(0, profile.balance - profitToDeduct).toFixed(2))
+      setProfile((prev) => ({ ...prev, balance: newBalance }))
+      await updateSellerProfile({ balance: newBalance })
+    } else if (order.status === 'cancelled' && newStatus !== 'cancelled') {
+      // If restoring an order from cancelled back to active
+      const profitToAdd = Number(order.profit) || 0
+      const newBalance = Number((profile.balance + profitToAdd).toFixed(2))
+      setProfile((prev) => ({ ...prev, balance: newBalance }))
+      await updateSellerProfile({ balance: newBalance })
+    }
+
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)))
     await updateOrderStatus(orderId, newStatus)
+    showToast(`Order ${order.orderNumber} status updated to ${newStatus.replace(/_/g, ' ')}`)
+  }
+
+  const handleDeleteOrder = async (orderId: string) => {
+    const orderToDelete = orders.find((o) => o.id === orderId)
+    if (!orderToDelete) return
+
+    setOrders((prev) => prev.filter((o) => o.id !== orderId))
+
+    // Rebalance seller profile if profit was attached and not yet cancelled
+    let newBalance = profile.balance
+    if (orderToDelete.status !== 'cancelled') {
+      const profitToDeduct = Number(orderToDelete.profit) || 0
+      newBalance = Number(Math.max(0, profile.balance - profitToDeduct).toFixed(2))
+    }
+    const newTotalOrders = Math.max(0, profile.totalOrders - 1)
+
+    setProfile((prev) => ({
+      ...prev,
+      balance: newBalance,
+      totalOrders: newTotalOrders,
+    }))
+
+    await Promise.all([
+      deleteOrder(orderId),
+      updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders }),
+    ])
+
+    showToast(`Order ${orderToDelete.orderNumber} permanently deleted`)
   }
 
   const handleMarkAsRead = async (id: string) => {
@@ -1760,6 +1820,7 @@ export default function Page() {
                 orders={orders}
                 onCreateDemoOrder={handleCreateDemoOrder}
                 onUpdateOrderStatus={handleUpdateOrderStatus}
+                onDeleteOrder={handleDeleteOrder}
                 onToast={showToast}
               />
             )}
@@ -1838,6 +1899,10 @@ export default function Page() {
         </div>
       ) : mode === 'admin' ? (
         <AdminPanel
+          orders={orders}
+          onUpdateOrderStatus={handleUpdateOrderStatus}
+          onDeleteOrder={handleDeleteOrder}
+          onCreateDemoOrder={handleCreateDemoOrder}
           onToast={showToast}
           onSignOut={signOut}
           onSwitchToSeller={() => {

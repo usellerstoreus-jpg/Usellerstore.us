@@ -322,6 +322,23 @@ export async function updateOrderStatus(orderId: string, status: Order['status']
   }
 }
 
+export async function deleteOrder(orderId: string): Promise<boolean> {
+  const client = getSupabase()
+  if (!client) return true
+
+  try {
+    const { error } = await client.from('orders').delete().eq('id', orderId)
+    if (error) {
+      console.warn('[Supabase] Failed to delete order:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('[Supabase] Error deleting order:', err)
+    return false
+  }
+}
+
 // -------------------------------------------------------------
 // NOTIFICATIONS API
 // -------------------------------------------------------------
