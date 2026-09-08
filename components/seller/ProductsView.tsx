@@ -39,6 +39,8 @@ export function ProductsView({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Form state for adding/editing product
   const [formData, setFormData] = useState<{
@@ -137,12 +139,9 @@ export function ProductsView({
     onToast('Product updated successfully!')
   }
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (confirm('Are you sure you want to remove this product from your store?')) {
-      onDeleteProduct(id)
-      onToast('Product removed from catalog')
-    }
+  const handleDelete = (prod: Product, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    setProductToDelete(prod)
   }
 
   return (
@@ -273,8 +272,8 @@ export function ProductsView({
                 </button>
                 <button
                   type="button"
-                  className="p-1 text-slate-500 hover:text-red-600 rounded hover:bg-slate-100"
-                  onClick={(e) => handleDelete(product.id, e)}
+                  className="p-1 text-slate-500 hover:text-red-600 rounded hover:bg-slate-100 cursor-pointer"
+                  onClick={(e) => handleDelete(product, e)}
                   title="Delete Product"
                 >
                   <Trash2 size={14} />
@@ -544,9 +543,9 @@ export function ProductsView({
               <div className="flex gap-3 pt-3">
                 <button
                   type="button"
-                  className="py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-600 font-semibold rounded-xl text-sm flex items-center gap-1.5"
+                  className="py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-600 font-semibold rounded-xl text-sm flex items-center gap-1.5 cursor-pointer"
                   onClick={(e) => {
-                    handleDelete(selectedProduct.id, e)
+                    handleDelete(selectedProduct, e)
                     setIsEditModalOpen(false)
                   }}
                 >
@@ -554,19 +553,56 @@ export function ProductsView({
                 </button>
                 <button
                   type="button"
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm cursor-pointer"
                   onClick={() => setIsEditModalOpen(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm shadow-md"
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm shadow-md cursor-pointer"
                 >
                   Save Changes
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {productToDelete && (
+        <div className="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="modal-content bg-white rounded-2xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-slate-100 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3">
+              <Trash2 size={24} />
+            </div>
+            <h3 className="font-bold text-base text-slate-900 mb-1">Delete Product Permanently?</h3>
+            <p className="text-xs text-slate-500 leading-relaxed mb-5">
+              Are you sure you want to remove <strong className="text-slate-800">{productToDelete.title}</strong>?
+              This will permanently delete this product from the database and catalog.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                onClick={() => setProductToDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                onClick={() => {
+                  onDeleteProduct(productToDelete.id)
+                  setProductToDelete(null)
+                  onToast('Product permanently deleted from database')
+                }}
+              >
+                <Trash2 size={14} />
+                <span>Delete Permanently</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -84,7 +84,15 @@ export async function checkSupabaseConnection(): Promise<ConnectionStatus> {
 // -------------------------------------------------------------
 export async function fetchProducts(): Promise<Product[] | null> {
   const client = getSupabase()
-  if (!client) return null
+  if (!client) {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_seller_products')
+        if (stored) return JSON.parse(stored)
+      }
+    } catch {}
+    return null
+  }
 
   try {
     const { data, error } = await client
@@ -94,10 +102,16 @@ export async function fetchProducts(): Promise<Product[] | null> {
 
     if (error) {
       console.warn('[Supabase] Failed to fetch products:', error.message)
+      try {
+        if (typeof window !== 'undefined') {
+          const stored = localStorage.getItem('u_seller_products')
+          if (stored) return JSON.parse(stored)
+        }
+      } catch {}
       return null
     }
 
-    return (data || []).map((row: any) => ({
+    const mapped: Product[] = (data || []).map((row: any) => ({
       id: row.id,
       title: row.title,
       category: row.category,
@@ -109,8 +123,23 @@ export async function fetchProducts(): Promise<Product[] | null> {
       sku: row.sku || '',
       status: row.status as Product['status'],
     }))
+
+    // Keep localStorage synchronized with live database
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('u_seller_products', JSON.stringify(mapped))
+      }
+    } catch {}
+
+    return mapped
   } catch (err) {
     console.warn('[Supabase] Error fetching products:', err)
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_seller_products')
+        if (stored) return JSON.parse(stored)
+      }
+    } catch {}
     return null
   }
 }
@@ -122,34 +151,47 @@ export async function createProduct(product: Omit<Product, 'id'> & { id?: string
   const newProduct: Product = {
     ...product,
     id: prodId,
+    cost: Number(product.cost),
+    sell: Number(product.sell),
+    profit: Number(product.profit),
+    stock: Number(product.stock),
   }
 
-  if (!client) return newProduct
+  if (!client) {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_seller_products')
+        const list: Product[] = stored ? JSON.parse(stored) : []
+        localStorage.setItem('u_seller_products', JSON.stringify([newProduct, ...list.filter((p) => p.id !== prodId)]))
+      }
+    } catch {}
+    return newProduct
+  }
 
   try {
     const { data, error } = await client
       .from('products')
       .insert({
         id: prodId,
-        title: product.title,
-        category: product.category,
-        cost: product.cost,
-        sell: product.sell,
-        profit: product.profit,
-        image: product.image,
-        stock: product.stock,
-        sku: product.sku,
-        status: product.status,
+        title: newProduct.title,
+        category: newProduct.category,
+        cost: newProduct.cost,
+        sell: newProduct.sell,
+        profit: newProduct.profit,
+        image: newProduct.image || '',
+        stock: newProduct.stock,
+        sku: newProduct.sku || '',
+        status: newProduct.status || 'active',
       })
       .select()
       .single()
 
     if (error) {
       console.warn('[Supabase] Failed to insert product:', error.message)
-      return newProduct
+      return null
     }
 
-    return {
+    const createdProduct: Product = {
       id: data.id,
       title: data.title,
       category: data.category,
@@ -161,15 +203,38 @@ export async function createProduct(product: Omit<Product, 'id'> & { id?: string
       sku: data.sku || '',
       status: data.status,
     }
+
+    // Synchronize to localStorage
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_seller_products')
+        const list: Product[] = stored ? JSON.parse(stored) : []
+        localStorage.setItem('u_seller_products', JSON.stringify([createdProduct, ...list.filter((p) => p.id !== createdProduct.id)]))
+      }
+    } catch {}
+
+    return createdProduct
   } catch (err) {
     console.warn('[Supabase] Error creating product:', err)
-    return newProduct
+    return null
   }
 }
 
 export async function updateProduct(product: Product): Promise<boolean> {
   const client = getSupabase()
-  if (!client) return false
+
+  // Always update local cache
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('u_seller_products')
+      if (stored) {
+        const list: Product[] = JSON.parse(stored)
+        localStorage.setItem('u_seller_products', JSON.stringify(list.map((p) => (p.id === product.id ? product : p))))
+      }
+    }
+  } catch {}
+
+  if (!client) return true
 
   try {
     const { error } = await client
@@ -177,11 +242,11 @@ export async function updateProduct(product: Product): Promise<boolean> {
       .update({
         title: product.title,
         category: product.category,
-        cost: product.cost,
-        sell: product.sell,
-        profit: product.profit,
+        cost: Number(product.cost),
+        sell: Number(product.sell),
+        profit: Number(product.profit),
         image: product.image,
-        stock: product.stock,
+        stock: Number(product.stock),
         sku: product.sku,
         status: product.status,
         updated_at: new Date().toISOString(),
@@ -201,7 +266,19 @@ export async function updateProduct(product: Product): Promise<boolean> {
 
 export async function deleteProduct(productId: string): Promise<boolean> {
   const client = getSupabase()
-  if (!client) return false
+
+  // Always remove from local cache immediately
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('u_seller_products')
+      if (stored) {
+        const list: Product[] = JSON.parse(stored)
+        localStorage.setItem('u_seller_products', JSON.stringify(list.filter((p) => p.id !== productId)))
+      }
+    }
+  } catch {}
+
+  if (!client) return true
 
   try {
     const { error } = await client
@@ -210,12 +287,12 @@ export async function deleteProduct(productId: string): Promise<boolean> {
       .eq('id', productId)
 
     if (error) {
-      console.warn('[Supabase] Failed to delete product:', error.message)
+      console.warn('[Supabase] Failed to delete product from database:', error.message)
       return false
     }
     return true
   } catch (err) {
-    console.warn('[Supabase] Error deleting product:', err)
+    console.warn('[Supabase] Error deleting product from database:', err)
     return false
   }
 }

@@ -1470,7 +1470,18 @@ export default function Page() {
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
-  const [products, setProducts] = useState<Product[]>(initialProducts)
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('u_seller_products')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) return parsed
+        }
+      } catch {}
+    }
+    return initialProducts
+  })
   const [orders, setOrders] = useState<Order[]>(initialOrders)
   const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications)
   const [profile, setProfile] = useState<SellerProfile>(initialSellerProfile)
@@ -1504,9 +1515,9 @@ export default function Page() {
         fetchNotifications(),
         fetchSellerProfile(),
       ])
-      if (supaProds && supaProds.length > 0) setProducts(supaProds)
-      if (supaOrders && supaOrders.length > 0) setOrders(supaOrders)
-      if (supaNotifs && supaNotifs.length > 0) setNotifications(supaNotifs)
+      if (supaProds !== null) setProducts(supaProds)
+      if (supaOrders !== null) setOrders(supaOrders)
+      if (supaNotifs !== null) setNotifications(supaNotifs)
       if (supaProfile) setProfile(supaProfile)
     } catch (err) {
       console.warn('[Supabase] Sync error:', err)
@@ -1554,18 +1565,35 @@ export default function Page() {
   const handleAddProduct = async (newProd: Omit<Product, 'id'>) => {
     const created = await createProduct(newProd)
     if (created) {
-      setProducts((prev) => [created, ...prev])
+      setProducts((prev) => [created, ...prev.filter((p) => p.id !== created.id)])
+      showToast(`Product "${created.title.slice(0, 24)}..." added permanently`)
+    } else {
+      showToast('Failed to save product to database')
     }
   }
 
   const handleUpdateProduct = async (updated: Product) => {
     setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
-    await updateProduct(updated)
+    const success = await updateProduct(updated)
+    if (success) {
+      showToast(`Product updated in database`)
+    }
   }
 
   const handleDeleteProduct = async (id: string) => {
+    const toDelete = products.find((p) => p.id === id)
+    // Update local state immediately
     setProducts((prev) => prev.filter((p) => p.id !== id))
-    await deleteProduct(id)
+    const success = await deleteProduct(id)
+    if (success) {
+      showToast(`Product "${toDelete?.title?.slice(0, 24) || id}..." permanently deleted from database`)
+    } else {
+      showToast('Error deleting product from database')
+      // Roll back if deletion failed
+      if (toDelete) {
+        setProducts((prev) => [toDelete, ...prev])
+      }
+    }
   }
 
   const handleCreateDemoOrder = async () => {
