@@ -1877,11 +1877,11 @@ export default function Page() {
           {/* Mobile Bottom Navigation Bar */}
           <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 py-1 shadow-lg flex justify-around items-center">
             {[
-              { id: 'Dashboard' as const, label: 'Cockpit', icon: LayoutDashboard },
+              { id: 'Dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
               { id: 'Products' as const, label: 'Products', icon: Package },
               { id: 'Orders' as const, label: 'Orders', icon: ShoppingBag },
-              { id: 'Notifications' as const, label: 'Alerts', icon: Bell, badge: unreadNotifCount },
-              { id: 'Profile' as const, label: 'Account', icon: User },
+              { id: 'Notifications' as const, label: 'Notifications', icon: Bell, badge: unreadNotifCount },
+              { id: 'Profile' as const, label: 'Profile', icon: User },
             ].map(({ id, label, icon: Icon, badge }) => {
               const isActive = sellerTab === id
               return (

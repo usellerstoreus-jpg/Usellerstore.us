@@ -6,8 +6,8 @@
   color-scheme: light;
   --background: #f8fafc;
   --foreground: #101827;
-  --navy: #123b60;
-  --blue: #286fd5;
+  --navy: #0B192C;
+  --blue: #0F52BA;
   --muted: #6b7b94;
   --line: #dfe6ee;
   --panel: #ffffff;
@@ -15,6 +15,7 @@
   --purple: #8050f2;
   --orange: #f59a23;
   --radius: 18px;
+  --gradient-primary: linear-gradient(135deg, #0B192C 0%, #0F52BA 50%, #0284C7 100%);
 }
 
 * {
@@ -228,17 +229,18 @@ button {
 }
 
 .balance-card {
-  background: linear-gradient(135deg, #164b78, #286797);
+  background: linear-gradient(135deg, #0B192C 0%, #0F52BA 55%, #0284C7 100%);
   color: #fff;
-  border-radius: 14px;
-  padding: 14px 16px;
-  box-shadow: 0 4px 12px rgba(22, 75, 120, 0.15);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 8px 24px -6px rgba(11, 25, 44, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .balance-card-btn:hover .balance-card {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(22, 75, 120, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -6px rgba(15, 82, 186, 0.45);
 }
 
 .balance-card span, .hero-balances span, .seller-balance span {
@@ -330,12 +332,12 @@ button {
 
 .welcome-hero {
   border-radius: 24px;
-  background: linear-gradient(135deg, #0a1f33 0%, #103a5d 55%, #185a7a 100%);
+  background: linear-gradient(135deg, #0B192C 0%, #0F52BA 50%, #1E3E62 100%);
   color: #fff;
   padding: 32px 36px 28px;
-  box-shadow: 0 16px 36px -10px rgba(10, 31, 51, 0.45);
+  box-shadow: 0 20px 48px -12px rgba(11, 25, 44, 0.55);
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .hero-glow-blob {
