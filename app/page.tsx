@@ -66,6 +66,7 @@ import { NotificationsView } from '@/components/seller/NotificationsView'
 import { ProfileView } from '@/components/seller/ProfileView'
 import { BalanceModal } from '@/components/seller/BalanceModal'
 import { SupportChatModal } from '@/components/seller/SupportChatModal'
+import { ShoppingDashboard } from '@/components/shop/ShoppingDashboard'
 import {
   fetchProducts,
   createProduct,
@@ -90,7 +91,7 @@ import {
 } from '@/lib/supabase/api'
 import { isSupabaseConfigured } from '@/lib/supabase/client'
 
-type Mode = 'seller' | 'admin' | 'login'
+type Mode = 'seller' | 'admin' | 'login' | 'shop'
 type SellerTab = 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile'
 
 const adminNav = [
@@ -1482,8 +1483,30 @@ export default function Page() {
     }
     return initialProducts
   })
-  const [orders, setOrders] = useState<Order[]>(initialOrders)
-  const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications)
+  const [orders, setOrders] = useState<Order[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('u_seller_orders')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) return parsed
+        }
+      } catch {}
+    }
+    return initialOrders
+  })
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('u_seller_notifications')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) return parsed
+        }
+      } catch {}
+    }
+    return initialNotifications
+  })
   const [profile, setProfile] = useState<SellerProfile>(initialSellerProfile)
 
   const showToast = (message: string) => {
@@ -1516,8 +1539,22 @@ export default function Page() {
         fetchSellerProfile(),
       ])
       if (supaProds !== null) setProducts(supaProds)
-      if (supaOrders !== null) setOrders(supaOrders)
-      if (supaNotifs !== null) setNotifications(supaNotifs)
+      if (supaOrders !== null) {
+        setOrders(supaOrders)
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('u_seller_orders', JSON.stringify(supaOrders))
+          }
+        } catch {}
+      }
+      if (supaNotifs !== null) {
+        setNotifications(supaNotifs)
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('u_seller_notifications', JSON.stringify(supaNotifs))
+          }
+        } catch {}
+      }
       if (supaProfile) setProfile(supaProfile)
     } catch (err) {
       console.warn('[Supabase] Sync error:', err)
@@ -1628,6 +1665,54 @@ export default function Page() {
     await updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders })
   }
 
+  const handleCreateOrderFromShop = async (newOrder: Order) => {
+    const saved = await createOrder(newOrder)
+    const activeOrder = saved || newOrder
+
+    // Decrement local product stock
+    setProducts((prev) =>
+      prev.map((p) => {
+        const item = newOrder.items.find((i) => i.productTitle.toLowerCase().includes(p.title.slice(0, 25).toLowerCase()))
+        if (item) {
+          const newStock = Math.max(0, p.stock - item.quantity)
+          return { ...p, stock: newStock, status: newStock === 0 ? 'out_of_stock' : p.status }
+        }
+        return p
+      })
+    )
+
+    // Update orders list
+    setOrders((prev) => [activeOrder, ...prev.filter((o) => o.id !== activeOrder.id)])
+
+    // Update seller balance & total orders
+    const profitToAdd = Number(activeOrder.profit) || 0
+    const newBalance = Number((profile.balance + profitToAdd).toFixed(2))
+    const newTotalOrders = profile.totalOrders + 1
+    const updatedProfile = {
+      ...profile,
+      balance: newBalance,
+      totalOrders: newTotalOrders,
+    }
+    setProfile(updatedProfile)
+    await updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders })
+
+    // Add a live notification
+    const newNotif: NotificationItem = {
+      id: 'notif-' + Date.now(),
+      title: 'New Customer Order',
+      description: `Order ${activeOrder.orderNumber} for $${Number(activeOrder.totalAmount).toFixed(2)} received from ${activeOrder.customerName}`,
+      date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase(),
+      timeAgo: 'Just now',
+      refCode: activeOrder.orderNumber,
+      type: 'order',
+      read: false,
+      details: `Customer ${activeOrder.customerName} (${activeOrder.customerEmail}) purchased ${activeOrder.items?.length || 0} item(s) totaling $${Number(activeOrder.totalAmount).toFixed(2)}. Profit: $${Number(activeOrder.profit).toFixed(2)}. Delivery to: ${activeOrder.shippingAddress}.`,
+    }
+    setNotifications((prev) => [newNotif, ...prev])
+
+    showToast(`Order ${activeOrder.orderNumber} recorded in database! (+$${profitToAdd.toFixed(2)} profit)`)
+  }
+
   const handleUpdateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
     const order = orders.find((o) => o.id === orderId)
     if (!order) return
@@ -1728,6 +1813,17 @@ export default function Page() {
             <div className="mode-menu">
               <button
                 type="button"
+                id="mode-switch-shop"
+                onClick={() => {
+                  setMode('shop')
+                  setModeOpen(false)
+                }}
+              >
+                🛍️ Shopping Storefront
+              </button>
+              <button
+                type="button"
+                id="mode-switch-seller"
                 onClick={() => {
                   setMode('seller')
                   setModeOpen(false)
@@ -1737,6 +1833,7 @@ export default function Page() {
               </button>
               <button
                 type="button"
+                id="mode-switch-admin"
                 onClick={() => {
                   setMode('admin')
                   setModeOpen(false)
@@ -1758,7 +1855,16 @@ export default function Page() {
         </header>
       )}
 
-      {mode === 'seller' ? (
+      {mode === 'shop' ? (
+        <ShoppingDashboard
+          products={products}
+          sellerProfile={profile}
+          onPlaceOrder={handleCreateOrderFromShop}
+          onSwitchToSeller={() => setMode('seller')}
+          onSwitchToAdmin={() => setMode('admin')}
+          onToast={showToast}
+        />
+      ) : mode === 'seller' ? (
         <div className="app-shell seller-shell flex flex-col md:flex-row min-h-screen">
           {/* Mobile Top Header */}
           <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
@@ -1807,6 +1913,7 @@ export default function Page() {
             }}
             onSignOutClick={signOut}
             onBalanceClick={() => setIsBalanceModalOpen(true)}
+            onOpenStorefront={() => setMode('shop')}
             unreadNotificationsCount={unreadNotifCount}
             shopName={profile.shopName}
             ownerName={profile.ownerName}
@@ -1827,6 +1934,7 @@ export default function Page() {
                   showToast(`${tab} opened`)
                 }}
                 onOpenBalanceModal={() => setIsBalanceModalOpen(true)}
+                onOpenStorefront={() => setMode('shop')}
                 onCreateDemoOrder={handleCreateDemoOrder}
                 onToast={showToast}
               />

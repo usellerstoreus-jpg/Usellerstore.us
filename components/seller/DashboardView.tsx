@@ -36,6 +36,7 @@ interface DashboardViewProps {
   orders: Order[]
   onNavigate: (tab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile') => void
   onOpenBalanceModal: () => void
+  onOpenStorefront?: () => void
   onToast: (msg: string) => void
   onCreateDemoOrder?: () => void
 }
@@ -46,6 +47,7 @@ export function DashboardView({
   orders,
   onNavigate,
   onOpenBalanceModal,
+  onOpenStorefront,
   onToast,
   onCreateDemoOrder,
 }: DashboardViewProps) {
@@ -268,6 +270,18 @@ export function DashboardView({
             <Plus size={15} className="text-blue-600" />
             <span>Add Product</span>
           </button>
+
+          {onOpenStorefront && (
+            <button
+              type="button"
+              id="dashboard-browse-storefront-btn"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-300 via-sky-200 to-blue-200 hover:from-cyan-200 hover:to-sky-100 text-slate-950 font-black px-3.5 py-2 text-xs shadow-md transition-all cursor-pointer"
+              onClick={onOpenStorefront}
+            >
+              <ShoppingCart size={15} className="text-blue-700" />
+              <span>Browse Storefront ({products.length} Products)</span>
+            </button>
+          )}
 
           <button
             type="button"

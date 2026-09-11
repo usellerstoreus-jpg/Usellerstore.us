@@ -12,7 +12,8 @@ import {
   X,
   ShieldCheck,
   CreditCard,
-  ExternalLink
+  ExternalLink,
+  Store
 } from 'lucide-react'
 
 export interface SellerSidebarProps {
@@ -20,6 +21,7 @@ export interface SellerSidebarProps {
   onSelectTab: (tab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile') => void
   onSignOutClick: () => void
   onBalanceClick: () => void
+  onOpenStorefront?: () => void
   unreadNotificationsCount: number
   shopName: string
   ownerName: string
@@ -34,6 +36,7 @@ export function SellerSidebar({
   onSelectTab,
   onSignOutClick,
   onBalanceClick,
+  onOpenStorefront,
   unreadNotificationsCount,
   shopName,
   ownerName,
@@ -102,6 +105,29 @@ export function SellerSidebar({
             </button>
           )}
         </div>
+
+        {/* Visit Public Storefront Button */}
+        {onOpenStorefront && (
+          <div className="px-3 pt-3">
+            <button
+              type="button"
+              id="sidebar-view-storefront-btn"
+              onClick={() => {
+                if (onCloseMobile) onCloseMobile()
+                onOpenStorefront()
+              }}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-sky-50 hover:from-blue-100 hover:to-sky-100 text-blue-700 text-xs font-bold transition-all border border-blue-200/70 cursor-pointer shadow-2xs group"
+            >
+              <span className="flex items-center gap-2">
+                <Store size={15} className="text-blue-600 group-hover:scale-110 transition-transform" />
+                <span>Visit Storefront</span>
+              </span>
+              <span className="bg-blue-600 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                Live <ExternalLink size={9} />
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Balance Card matching usellerstore.com */}
         <button

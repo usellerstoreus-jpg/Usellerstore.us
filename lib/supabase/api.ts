@@ -302,7 +302,15 @@ export async function deleteProduct(productId: string): Promise<boolean> {
 // -------------------------------------------------------------
 export async function fetchOrders(): Promise<Order[] | null> {
   const client = getSupabase()
-  if (!client) return null
+  if (!client) {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_seller_orders')
+        if (stored) return JSON.parse(stored)
+      }
+    } catch {}
+    return null
+  }
 
   try {
     const { data, error } = await client
@@ -312,10 +320,16 @@ export async function fetchOrders(): Promise<Order[] | null> {
 
     if (error) {
       console.warn('[Supabase] Failed to fetch orders:', error.message)
+      try {
+        if (typeof window !== 'undefined') {
+          const stored = localStorage.getItem('u_seller_orders')
+          if (stored) return JSON.parse(stored)
+        }
+      } catch {}
       return null
     }
 
-    return (data || []).map((row: any) => ({
+    const mapped: Order[] = (data || []).map((row: any) => ({
       id: row.id,
       orderNumber: row.order_number,
       customerName: row.customer_name,
@@ -327,13 +341,53 @@ export async function fetchOrders(): Promise<Order[] | null> {
       status: row.status as Order['status'],
       date: row.date || '',
     }))
+
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('u_seller_orders', JSON.stringify(mapped))
+      }
+    } catch {}
+
+    return mapped
   } catch (err) {
     console.warn('[Supabase] Error fetching orders:', err)
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_seller_orders')
+        if (stored) return JSON.parse(stored)
+      }
+    } catch {}
     return null
   }
 }
 
 export async function createOrder(order: Order): Promise<Order | null> {
+  // Always update local cache first
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('u_seller_orders')
+      const list: Order[] = stored ? JSON.parse(stored) : []
+      localStorage.setItem('u_seller_orders', JSON.stringify([order, ...list.filter((o) => o.id !== order.id)]))
+    }
+  } catch {}
+
+  // Try API route first for atomic multi-table database updates
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.order) return data.order
+      }
+    } catch (apiErr) {
+      console.warn('[API /api/orders] Fallback to direct client insert:', apiErr)
+    }
+  }
+
   const client = getSupabase()
   if (!client) return order
 
@@ -359,6 +413,21 @@ export async function createOrder(order: Order): Promise<Order | null> {
       console.warn('[Supabase] Failed to create order:', error.message)
       return order
     }
+
+    // Also record a notification in Supabase
+    try {
+      await client.from('notifications').insert({
+        id: 'notif-' + Date.now(),
+        title: 'New Customer Order',
+        description: `Order ${order.orderNumber} for $${Number(order.totalAmount).toFixed(2)} received from ${order.customerName}`,
+        date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase(),
+        time_ago: 'Just now',
+        ref_code: order.orderNumber,
+        type: 'order',
+        read: false,
+        details: `Customer ${order.customerName} (${order.customerEmail}) purchased ${order.items?.length || 0} item(s) totaling $${Number(order.totalAmount).toFixed(2)}. Profit: $${Number(order.profit).toFixed(2)}. Delivery to: ${order.shippingAddress}.`,
+      })
+    } catch {}
 
     return {
       id: data.id,
@@ -448,6 +517,33 @@ export async function fetchNotifications(): Promise<NotificationItem[] | null> {
   } catch (err) {
     console.warn('[Supabase] Error fetching notifications:', err)
     return null
+  }
+}
+
+export async function createNotification(notification: NotificationItem): Promise<boolean> {
+  const client = getSupabase()
+  if (!client) return false
+
+  try {
+    const { error } = await client.from('notifications').insert({
+      id: notification.id,
+      title: notification.title,
+      description: notification.description || '',
+      date: notification.date || '',
+      time_ago: notification.timeAgo || 'Just now',
+      ref_code: notification.refCode || '',
+      type: notification.type || 'system',
+      read: Boolean(notification.read),
+      details: notification.details || '',
+    })
+    if (error) {
+      console.warn('[Supabase] Failed to create notification:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('[Supabase] Error creating notification:', err)
+    return false
   }
 }
 
