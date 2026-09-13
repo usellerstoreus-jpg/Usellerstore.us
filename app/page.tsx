@@ -1473,7 +1473,11 @@ export default function Page() {
         const stored = localStorage.getItem('u_seller_products')
         if (stored) {
           const parsed = JSON.parse(stored)
-          if (Array.isArray(parsed)) return parsed
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const existingIds = new Set(parsed.map((p: any) => p.id))
+            const newFromInitial = initialProducts.filter((p) => !existingIds.has(p.id))
+            return [...newFromInitial, ...parsed]
+          }
         }
       } catch {}
     }
@@ -1534,7 +1538,11 @@ export default function Page() {
         fetchNotifications(),
         fetchSellerProfile(),
       ])
-      if (supaProds !== null) setProducts(supaProds)
+      if (supaProds !== null) {
+        const supaIds = new Set(supaProds.map((p) => p.id))
+        const newFromInitial = initialProducts.filter((p) => !supaIds.has(p.id))
+        setProducts([...newFromInitial, ...supaProds])
+      }
       if (supaOrders !== null) {
         setOrders(supaOrders)
         try {
