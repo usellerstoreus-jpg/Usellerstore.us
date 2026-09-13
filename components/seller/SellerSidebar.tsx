@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Store
 } from 'lucide-react'
+import { BrandLogo } from '@/components/ui/BrandLogo'
 
 export interface SellerSidebarProps {
   activeTab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile'
@@ -79,31 +80,32 @@ export function SellerSidebar({
         aria-label="Seller Account Navigation"
       >
         {/* Brand Header */}
-        <div className="brand flex items-center justify-between p-4 border-b border-slate-100">
-          <div
-            className="flex items-center gap-3 cursor-pointer flex-1 min-w-0 group"
-            onClick={() => handleSelect('Dashboard')}
-          >
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#0B192C] to-[#0F52BA] text-white flex items-center justify-center shadow-md ring-1 ring-black/10 shrink-0 transition-transform group-hover:scale-105">
-              <ShoppingCart size={20} strokeWidth={2.4} />
+        <div className="brand flex flex-col gap-2 p-4 border-b border-slate-100">
+          <div className="flex items-center justify-between">
+            <div
+              className="cursor-pointer group flex items-center"
+              onClick={() => handleSelect('Dashboard')}
+            >
+              <BrandLogo size="md" />
             </div>
-            <div className="brand-info truncate min-w-0">
-              <strong className="truncate block font-bold text-slate-900 text-sm">{shopName}</strong>
-              <span className="truncate block text-xs text-slate-500 font-medium">{ownerName || 'Merchant'}</span>
-            </div>
+
+            {/* Close button inside mobile drawer */}
+            {isOpenOnMobile && (
+              <button
+                type="button"
+                className="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 cursor-pointer"
+                onClick={onCloseMobile}
+                aria-label="Close menu"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
 
-          {/* Close button inside mobile drawer */}
-          {isOpenOnMobile && (
-            <button
-              type="button"
-              className="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0"
-              onClick={onCloseMobile}
-              aria-label="Close menu"
-            >
-              <X size={20} />
-            </button>
-          )}
+          <div className="flex items-center justify-between pt-1 border-t border-slate-100/80 text-xs">
+            <span className="font-semibold text-slate-700 truncate max-w-[170px]">{shopName}</span>
+            <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded">Seller</span>
+          </div>
         </div>
 
         {/* Visit Public Storefront Button */}

@@ -67,6 +67,7 @@ import { ProfileView } from '@/components/seller/ProfileView'
 import { BalanceModal } from '@/components/seller/BalanceModal'
 import { SupportChatModal } from '@/components/seller/SupportChatModal'
 import { ShoppingDashboard } from '@/components/shop/ShoppingDashboard'
+import { BrandLogo } from '@/components/ui/BrandLogo'
 import {
   fetchProducts,
   createProduct,
@@ -151,15 +152,12 @@ function AdminSidebar({
             : 'hidden md:flex'
         }`}
       >
-        <div className="brand flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="brand-mark shrink-0">
-              <Grid2X2 size={22} strokeWidth={2.4} />
-            </div>
-            <div className="brand-info truncate">
-              <strong>U Seller Store</strong>
-              <span>Management Console</span>
-            </div>
+        <div className="brand flex items-center justify-between p-4 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <BrandLogo size="md" />
+            <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider">
+              Admin
+            </span>
           </div>
           {isOpenOnMobile && (
             <button
@@ -277,6 +275,7 @@ function AdminPanel({
             >
               <Menu size={22} />
             </button>
+            <BrandLogo size="sm" variant="light" showText={false} />
             <div>
               <strong className="text-xs font-bold text-white block leading-tight">Admin Console</strong>
               <span className="text-[10px] text-purple-300 font-semibold">{active}</span>
@@ -886,15 +885,7 @@ function AuthScreen({
     <main className="login-page">
       <div className="login-visual">
         <div className="brand" style={{ padding: 0, border: 0 }}>
-          <div className="brand-mark" style={{ color: '#fff', borderColor: '#7197ad' }}>
-            <Store size={22} />
-          </div>
-          <div className="brand-info">
-            <strong style={{ color: '#fff' }}>U Seller Store</strong>
-            <span style={{ color: '#adc9e4' }}>
-              {rolePortal === 'admin' ? 'Administrator Gateway' : 'Merchant Portal'}
-            </span>
-          </div>
+          <BrandLogo size="lg" variant="light" />
         </div>
         <div className="login-copy">
           <span className="eyebrow">THE SIMPLE WAY TO SELL ONLINE</span>
@@ -927,6 +918,11 @@ function AuthScreen({
 
       <div className="login-form-wrap">
         <div className="login-form">
+          {/* Brand Logo for Mobile Auth */}
+          <div className="flex md:hidden justify-center mb-5">
+            <BrandLogo size="md" />
+          </div>
+
           {/* Main Role Selector Pill: Seller vs Admin */}
           <div className="flex bg-slate-200/80 p-1 rounded-xl mb-5 text-xs font-bold">
             <button
@@ -1878,9 +1874,7 @@ export default function Page() {
                 <Menu size={22} />
               </button>
               <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSellerTab('Dashboard')}>
-                <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                  {profile.avatarLetter || 'U'}
-                </div>
+                <BrandLogo size="sm" showText={false} />
                 <div>
                   <strong className="text-xs text-slate-900 block font-bold leading-tight truncate max-w-[140px]">
                     {profile.shopName}

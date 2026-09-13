@@ -1,0 +1,12 @@
+<svg width="180" height="40" viewBox="0 0 180 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cart Body -->
+  <path d="M2.5 5H7.5L10.8 21.7C11.1 22.8 12.1 23.5 13.2 23.5H28.8C29.8 23.5 30.8 22.7 31.0 21.7L34.5 9.5H8.8" stroke="#1E3A8A" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Orange "U" Swoosh -->
+  <path d="M13.5 11C13.5 17.5 16.5 20.5 21.5 20.5C26.5 20.5 29.5 17.5 29.5 11" stroke="#F97316" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Wheels -->
+  <circle cx="14.5" cy="30.5" r="2.8" fill="#1E3A8A"/>
+  <circle cx="28" cy="30.5" r="2.8" fill="#1E3A8A"/>
+  <!-- Typography -->
+  <text x="44" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="18" fill="#0F172A">U Seller</text>
+  <text x="120" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="18" fill="#0F52BA">Store</text>
+</svg>
