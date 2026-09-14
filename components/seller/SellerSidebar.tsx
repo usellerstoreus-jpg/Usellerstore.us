@@ -46,6 +46,12 @@ export function SellerSidebar({
   isOpenOnMobile = false,
   onCloseMobile,
 }: SellerSidebarProps) {
+  const [isMounted, setIsMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
   const navItems = [
     { id: 'Dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'Products' as const, label: 'Products', icon: Package },
@@ -103,7 +109,7 @@ export function SellerSidebar({
           </div>
 
           <div className="flex items-center justify-between pt-1 border-t border-slate-100/80 text-xs">
-            <span className="font-semibold text-slate-700 truncate max-w-[170px]">{shopName}</span>
+            <span suppressHydrationWarning className="font-semibold text-slate-700 truncate max-w-[170px]">{shopName}</span>
             <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded">Seller</span>
           </div>
         </div>
@@ -146,9 +152,9 @@ export function SellerSidebar({
               <span className="text-[10px] uppercase font-bold tracking-wider text-cyan-200">SHOP BALANCE</span>
               <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full text-white font-semibold">USD</span>
             </div>
-            <strong className="text-2xl font-black block tabular-nums text-white">${balance.toFixed(2)}</strong>
+            <strong suppressHydrationWarning className="text-2xl font-black block tabular-nums text-white">${balance.toFixed(2)}</strong>
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/15 text-[11px] text-cyan-100">
-              <span>Guarantee: ${guarantee.toFixed(2)}</span>
+              <span suppressHydrationWarning>Guarantee: ${guarantee.toFixed(2)}</span>
               <span className="text-white/80 underline font-semibold">Manage →</span>
             </div>
           </div>
@@ -177,8 +183,11 @@ export function SellerSidebar({
                   }`}
                 />
                 <span className="truncate">{label}</span>
-                {Boolean(badge && badge > 0) && (
-                  <span className="ml-auto bg-rose-500 text-white text-[11px] px-2 py-0.5 rounded-full font-bold tabular-nums shadow-xs">
+                {Boolean(isMounted && badge && badge > 0) && (
+                  <span
+                    suppressHydrationWarning
+                    className="ml-auto bg-rose-500 text-white text-[11px] px-2 py-0.5 rounded-full font-bold tabular-nums shadow-xs"
+                  >
                     {badge}
                   </span>
                 )}

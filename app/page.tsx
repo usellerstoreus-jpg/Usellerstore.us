@@ -1467,46 +1467,9 @@ export default function Page() {
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
-  const [products, setProducts] = useState<Product[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('u_seller_products')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const existingIds = new Set(parsed.map((p: any) => p.id))
-            const newFromInitial = initialProducts.filter((p) => !existingIds.has(p.id))
-            return [...newFromInitial, ...parsed]
-          }
-        }
-      } catch {}
-    }
-    return initialProducts
-  })
-  const [orders, setOrders] = useState<Order[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('u_seller_orders')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          if (Array.isArray(parsed)) return parsed
-        }
-      } catch {}
-    }
-    return initialOrders
-  })
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('u_seller_notifications')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          if (Array.isArray(parsed)) return parsed
-        }
-      } catch {}
-    }
-    return initialNotifications
-  })
+  const [products, setProducts] = useState<Product[]>(initialProducts)
+  const [orders, setOrders] = useState<Order[]>(initialOrders)
+  const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications)
   const [profile, setProfile] = useState<SellerProfile>(initialSellerProfile)
 
   const showToast = (message: string) => {
@@ -1526,6 +1489,28 @@ export default function Page() {
             setProfile(session.profile)
             setMode('seller')
           }
+        }
+
+        const storedProds = localStorage.getItem('u_seller_products')
+        if (storedProds) {
+          const parsed = JSON.parse(storedProds)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const existingIds = new Set(parsed.map((p: any) => p.id))
+            const newFromInitial = initialProducts.filter((p) => !existingIds.has(p.id))
+            setProducts([...newFromInitial, ...parsed])
+          }
+        }
+
+        const storedOrders = localStorage.getItem('u_seller_orders')
+        if (storedOrders) {
+          const parsed = JSON.parse(storedOrders)
+          if (Array.isArray(parsed)) setOrders(parsed)
+        }
+
+        const storedNotifs = localStorage.getItem('u_seller_notifications')
+        if (storedNotifs) {
+          const parsed = JSON.parse(storedNotifs)
+          if (Array.isArray(parsed)) setNotifications(parsed)
         }
       }
     } catch {}
@@ -1884,7 +1869,7 @@ export default function Page() {
               <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSellerTab('Dashboard')}>
                 <BrandLogo size="sm" showText={false} />
                 <div>
-                  <strong className="text-xs text-slate-900 block font-bold leading-tight truncate max-w-[140px]">
+                  <strong suppressHydrationWarning className="text-xs text-slate-900 block font-bold leading-tight truncate max-w-[140px]">
                     {profile.shopName}
                   </strong>
                   <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
@@ -1902,7 +1887,7 @@ export default function Page() {
                 title="Click to view balance details"
               >
                 <Wallet size={12} />
-                <span>${profile.balance.toFixed(2)}</span>
+                <span suppressHydrationWarning>${profile.balance.toFixed(2)}</span>
               </button>
             </div>
           </div>

@@ -21,33 +21,8 @@ import { Check, X } from 'lucide-react'
 
 export default function ShopPage() {
   const router = useRouter()
-  const [products, setProducts] = useState<Product[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('u_seller_products')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const existingIds = new Set(parsed.map((p: any) => p.id))
-            const newFromInitial = initialProducts.filter((p) => !existingIds.has(p.id))
-            return [...newFromInitial, ...parsed]
-          }
-        }
-      } catch {}
-    }
-    return initialProducts
-  })
-
-  const [profile, setProfile] = useState<SellerProfile>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('u_seller_active_profile')
-        if (stored) return JSON.parse(stored)
-      } catch {}
-    }
-    return initialSellerProfile
-  })
-
+  const [products, setProducts] = useState<Product[]>(initialProducts)
+  const [profile, setProfile] = useState<SellerProfile>(initialSellerProfile)
   const [toast, setToast] = useState('')
 
   const showToast = (message: string) => {
@@ -56,6 +31,24 @@ export default function ShopPage() {
   }
 
   useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_seller_products')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const existingIds = new Set(parsed.map((p: any) => p.id))
+            const newFromInitial = initialProducts.filter((p) => !existingIds.has(p.id))
+            setProducts([...newFromInitial, ...parsed])
+          }
+        }
+        const storedProfile = localStorage.getItem('u_seller_active_profile')
+        if (storedProfile) {
+          setProfile(JSON.parse(storedProfile))
+        }
+      }
+    } catch {}
+
     async function loadData() {
       if (!isSupabaseConfigured()) return
       try {

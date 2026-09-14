@@ -187,25 +187,11 @@ export function ShoppingDashboard({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
 
-  // Cart & Wishlist State
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('u_seller_cart')
-        if (saved) return JSON.parse(saved)
-      } catch {}
-    }
-    return []
-  })
-  const [wishlist, setWishlist] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('u_seller_wishlist')
-        if (saved) return JSON.parse(saved)
-      } catch {}
-    }
-    return []
-  })
+  // Cart & Wishlist State (SSR-safe)
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [wishlist, setWishlist] = useState<string[]>([])
+  const [recentOrderNumbers, setRecentOrderNumbers] = useState<string[]>([])
+  const [isMounted, setIsMounted] = useState(false)
 
   // Modals State
   const [isCartOpen, setIsCartOpen] = useState(false)
@@ -222,15 +208,6 @@ export function ShoppingDashboard({
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null)
   const [isSearchingTrack, setIsSearchingTrack] = useState(false)
   const [trackError, setTrackError] = useState('')
-  const [recentOrderNumbers, setRecentOrderNumbers] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('u_recent_orders')
-        if (stored) return JSON.parse(stored)
-      } catch {}
-    }
-    return []
-  })
 
   // Checkout Form State
   const [customerInfo, setCustomerInfo] = useState({
@@ -248,19 +225,43 @@ export function ShoppingDashboard({
   })
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
 
+  // Load from localStorage on client mount
+  useEffect(() => {
+    setIsMounted(true)
+    try {
+      if (typeof window !== 'undefined') {
+        const savedCart = localStorage.getItem('u_seller_cart')
+        if (savedCart) {
+          const parsed = JSON.parse(savedCart)
+          if (Array.isArray(parsed)) setCart(parsed)
+        }
+        const savedWish = localStorage.getItem('u_seller_wishlist')
+        if (savedWish) {
+          const parsed = JSON.parse(savedWish)
+          if (Array.isArray(parsed)) setWishlist(parsed)
+        }
+        const savedOrders = localStorage.getItem('u_recent_orders')
+        if (savedOrders) {
+          const parsed = JSON.parse(savedOrders)
+          if (Array.isArray(parsed)) setRecentOrderNumbers(parsed)
+        }
+      }
+    } catch {}
+  }, [])
+
   // Sync Cart to LocalStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (isMounted && typeof window !== 'undefined') {
       localStorage.setItem('u_seller_cart', JSON.stringify(cart))
     }
-  }, [cart])
+  }, [cart, isMounted])
 
   // Sync Wishlist to LocalStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (isMounted && typeof window !== 'undefined') {
       localStorage.setItem('u_seller_wishlist', JSON.stringify(wishlist))
     }
-  }, [wishlist])
+  }, [wishlist, isMounted])
 
   // Extract Distinct Categories
   const categories = useMemo(() => {
@@ -630,8 +631,11 @@ export function ShoppingDashboard({
               aria-label="Shopping Cart"
             >
               <ShoppingCart size={21} className="group-hover:scale-105 transition-transform" />
-              {totalCartItems > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-[#F97316] text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
+              {isMounted && totalCartItems > 0 && (
+                <span
+                  suppressHydrationWarning
+                  className="absolute -top-1.5 -right-1.5 bg-[#F97316] text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs"
+                >
                   {totalCartItems}
                 </span>
               )}

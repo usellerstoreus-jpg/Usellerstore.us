@@ -225,7 +225,7 @@ export function DashboardView({
                   <span>{profile.rating.toFixed(1)}</span>
                 </span>
                 <span className="opacity-40">·</span>
-                <span className="truncate">{orders.length} orders all-time</span>
+                <span suppressHydrationWarning className="truncate">{orders.length} orders all-time</span>
               </div>
             </div>
           </div>
@@ -241,7 +241,7 @@ export function DashboardView({
                 <CircleDollarSign size={12} />
                 <span>AVAILABLE BALANCE</span>
               </div>
-              <div className="text-lg sm:text-2xl font-black tabular-nums leading-tight mt-1 text-white">
+              <div suppressHydrationWarning className="text-lg sm:text-2xl font-black tabular-nums leading-tight mt-1 text-white">
                 ${profile.balance.toFixed(2)}
               </div>
               <span className="text-[10px] text-cyan-200/80 underline font-medium">Recharge / Payout →</span>
@@ -252,7 +252,7 @@ export function DashboardView({
                 <ShieldCheck size={12} />
                 <span>GUARANTEE POOL</span>
               </div>
-              <div className="text-lg sm:text-2xl font-black tabular-nums leading-tight mt-1 text-emerald-300">
+              <div suppressHydrationWarning className="text-lg sm:text-2xl font-black tabular-nums leading-tight mt-1 text-emerald-300">
                 ${profile.guarantee.toFixed(2)}
               </div>
               <span className="text-[10px] text-emerald-200/80 font-medium">100% Protected</span>
@@ -279,7 +279,7 @@ export function DashboardView({
               onClick={onOpenStorefront}
             >
               <ShoppingCart size={15} className="text-blue-700" />
-              <span>Browse Storefront ({products.length} Products)</span>
+              <span suppressHydrationWarning>Browse Storefront ({products.length} Products)</span>
             </button>
           )}
 
@@ -289,7 +289,7 @@ export function DashboardView({
             onClick={() => onNavigate('Orders')}
           >
             <ShoppingCart size={15} />
-            <span>View Orders ({orders.length})</span>
+            <span suppressHydrationWarning>View Orders ({orders.length})</span>
           </button>
 
           <button
