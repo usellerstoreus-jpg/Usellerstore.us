@@ -34,6 +34,8 @@ import {
   Lock,
   Building2,
   PackageCheck,
+  Package,
+  LogOut,
   Trash2,
   Printer,
   Clock,
@@ -42,11 +44,13 @@ import {
 } from 'lucide-react'
 import { Product, Order, SellerProfile, shopCategories } from '@/lib/mock-data'
 import { BrandLogo } from '@/components/ui/BrandLogo'
+import { CustomerAccountPortal, AccountTab } from './CustomerAccountPortal'
 
 export interface ShoppingDashboardProps {
   products: Product[]
   sellerProfile: SellerProfile
   initialNavTab?: 'home' | 'shop' | 'categories'
+  initialAccountTab?: AccountTab | null
   onPlaceOrder?: (order: Order) => Promise<void> | void
   onSwitchToSeller?: () => void
   onSwitchToAdmin?: () => void
@@ -174,6 +178,7 @@ export function ShoppingDashboard({
   products,
   sellerProfile,
   initialNavTab = 'shop',
+  initialAccountTab = null,
   onPlaceOrder,
   onSwitchToSeller,
   onSwitchToAdmin,
@@ -181,6 +186,7 @@ export function ShoppingDashboard({
 }: ShoppingDashboardProps) {
   // Navigation & Carousel State
   const [activeNavTab, setActiveNavTab] = useState<'home' | 'shop' | 'categories'>(initialNavTab)
+  const [accountTab, setAccountTab] = useState<AccountTab | null>(initialAccountTab)
   const [currentSlide, setCurrentSlide] = useState(1) // Default to slide 2 ("02 / 06 - Made for everyday comfort")
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
@@ -194,6 +200,7 @@ export function ShoppingDashboard({
   const [cart, setCart] = useState<CartItem[]>([])
   const [wishlist, setWishlist] = useState<string[]>([])
   const [recentOrderNumbers, setRecentOrderNumbers] = useState<string[]>([])
+  const [allOrders, setAllOrders] = useState<Order[]>([])
   const [isMounted, setIsMounted] = useState(false)
 
   // Modals State
@@ -247,6 +254,11 @@ export function ShoppingDashboard({
         if (savedOrders) {
           const parsed = JSON.parse(savedOrders)
           if (Array.isArray(parsed)) setRecentOrderNumbers(parsed)
+        }
+        const savedAllOrders = localStorage.getItem('u_seller_orders')
+        if (savedAllOrders) {
+          const parsed = JSON.parse(savedAllOrders)
+          if (Array.isArray(parsed)) setAllOrders(parsed)
         }
       }
     } catch {}
@@ -432,6 +444,7 @@ export function ShoppingDashboard({
         await onPlaceOrder(newOrder)
       }
       setCompletedOrder(newOrder)
+      setAllOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)])
       setRecentOrderNumbers((prev) => {
         const updated = [newOrder.orderNumber, ...prev.filter((n) => n !== newOrder.orderNumber)].slice(0, 5)
         try {
@@ -522,6 +535,7 @@ export function ShoppingDashboard({
           <div className="flex items-center gap-6 lg:gap-8 shrink-0">
             {/* Official U Seller Store Logo */}
             <BrandLogo size="md" onClick={() => {
+              setAccountTab(null)
               setActiveNavTab('shop')
               window.scrollTo({ top: 0, behavior: 'smooth' })
             }} />
@@ -532,13 +546,14 @@ export function ShoppingDashboard({
                 type="button"
                 id="nav-link-home"
                 onClick={() => {
+                  setAccountTab(null)
                   setActiveNavTab('home')
                   setSelectedCategory('All')
                   setSearchQuery('')
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
                 className={`transition-colors cursor-pointer ${
-                  activeNavTab === 'home'
+                  !accountTab && activeNavTab === 'home'
                     ? 'text-slate-950 font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
@@ -549,11 +564,12 @@ export function ShoppingDashboard({
                 type="button"
                 id="nav-link-shop"
                 onClick={() => {
+                  setAccountTab(null)
                   setActiveNavTab('shop')
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
                 className={`transition-colors cursor-pointer ${
-                  activeNavTab === 'shop'
+                  !accountTab && activeNavTab === 'shop'
                     ? 'text-slate-950 font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
@@ -564,6 +580,7 @@ export function ShoppingDashboard({
                 type="button"
                 id="nav-link-categories"
                 onClick={() => {
+                  setAccountTab(null)
                   setActiveNavTab('shop')
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
@@ -605,11 +622,8 @@ export function ShoppingDashboard({
               type="button"
               id="header-wishlist-btn"
               onClick={() => {
-                if (wishlist.length === 0) {
-                  onToast('Your wishlist is currently empty')
-                } else {
-                  onToast(`You have ${wishlist.length} item(s) in your wishlist`)
-                }
+                setAccountTab('wishlist')
+                window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
               className="p-1.5 text-slate-700 hover:text-rose-600 transition-colors relative cursor-pointer"
               title="Wishlist"
@@ -639,7 +653,10 @@ export function ShoppingDashboard({
             <button
               type="button"
               id="header-cart-btn"
-              onClick={() => setIsCartOpen(true)}
+              onClick={() => {
+                setAccountTab('cart')
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
               className="p-1.5 text-slate-700 hover:text-slate-900 transition-colors relative cursor-pointer group"
               title="Shopping Cart"
               aria-label="Shopping Cart"
@@ -655,7 +672,7 @@ export function ShoppingDashboard({
               )}
             </button>
 
-            {/* User Profile / Portal Menu Icon */}
+            {/* User Profile / Portal Menu Icon Matching Screenshot 1 */}
             <div className="relative">
               <button
                 type="button"
@@ -668,52 +685,103 @@ export function ShoppingDashboard({
                 <User size={21} />
               </button>
 
-              {/* User Dropdown Portal Switcher */}
+              {/* User Dropdown Portal Switcher Matching Screenshot 1 */}
               {isUserMenuOpen && (
-                <div className="absolute right-0 top-10 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50 text-xs space-y-1 animate-in fade-in zoom-in-95">
+                <div className="absolute right-0 top-10 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50 text-xs space-y-0.5 animate-in fade-in zoom-in-95">
                   <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                    <strong className="block text-slate-900 font-bold">{sellerProfile.shopName}</strong>
-                    <span className="text-slate-400">{sellerProfile.email}</span>
+                    <span className="block text-slate-900 font-bold text-xs truncate">
+                      usellerstore.us@gmail.com
+                    </span>
                   </div>
 
                   <button
                     type="button"
+                    id="dropdown-menu-profile"
                     onClick={() => {
-                      setIsTrackModalOpen(true)
+                      setAccountTab('profile')
                       setIsUserMenuOpen(false)
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 font-semibold text-slate-700 flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 font-medium text-slate-700 flex items-center gap-2.5 cursor-pointer transition-colors"
                   >
-                    <PackageCheck size={15} className="text-blue-600" />
-                    <span>Track My Order</span>
+                    <User size={16} className="text-slate-500" />
+                    <span>Profile</span>
                   </button>
 
-                  {onSwitchToSeller && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsUserMenuOpen(false)
-                        onSwitchToSeller()
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-blue-50 font-semibold text-blue-700 flex items-center gap-2 cursor-pointer"
-                    >
-                      <Store size={15} />
-                      <span>Seller Console</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    id="dropdown-menu-orders"
+                    onClick={() => {
+                      setAccountTab('orders')
+                      setIsUserMenuOpen(false)
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 font-medium text-slate-700 flex items-center gap-2.5 cursor-pointer transition-colors"
+                  >
+                    <Package size={16} className="text-slate-500" />
+                    <span>My Orders</span>
+                  </button>
 
-                  {onSwitchToAdmin && (
+                  <button
+                    type="button"
+                    id="dropdown-menu-wishlist"
+                    onClick={() => {
+                      setAccountTab('wishlist')
+                      setIsUserMenuOpen(false)
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 font-medium text-slate-700 flex items-center gap-2.5 cursor-pointer transition-colors"
+                  >
+                    <Heart size={16} className="text-slate-500" />
+                    <span>Wishlist</span>
+                  </button>
+
+                  <div className="border-t border-slate-100 my-1 pt-1">
                     <button
                       type="button"
+                      id="dropdown-menu-logout"
                       onClick={() => {
                         setIsUserMenuOpen(false)
-                        onSwitchToAdmin()
+                        onToast('Logged out of usellerstore.us@gmail.com')
+                        setAccountTab(null)
                       }}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-purple-50 font-semibold text-purple-700 flex items-center gap-2 cursor-pointer"
+                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 font-medium text-slate-700 hover:text-rose-600 flex items-center gap-2.5 cursor-pointer transition-colors"
                     >
-                      <Building2 size={15} />
-                      <span>Admin Panel</span>
+                      <LogOut size={16} className="text-slate-500" />
+                      <span>Logout</span>
                     </button>
+                  </div>
+
+                  {/* Seller Console / Admin Portal Switcher */}
+                  {(onSwitchToSeller || onSwitchToAdmin) && (
+                    <div className="border-t border-slate-100 pt-1 mt-1 space-y-1">
+                      {onSwitchToSeller && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserMenuOpen(false)
+                            onSwitchToSeller()
+                          }}
+                          className="w-full text-left px-3 py-1.5 rounded-xl hover:bg-blue-50 font-medium text-blue-700 flex items-center gap-2 cursor-pointer text-[11px]"
+                        >
+                          <Store size={13} />
+                          <span>Seller Console</span>
+                        </button>
+                      )}
+                      {onSwitchToAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserMenuOpen(false)
+                            onSwitchToAdmin()
+                          }}
+                          className="w-full text-left px-3 py-1.5 rounded-xl hover:bg-purple-50 font-medium text-purple-700 flex items-center gap-2 cursor-pointer text-[11px]"
+                        >
+                          <Building2 size={13} />
+                          <span>Admin Panel</span>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -736,7 +804,49 @@ export function ShoppingDashboard({
         </div>
       </header>
 
-      {activeNavTab === 'shop' ? (
+      {accountTab !== null ? (
+        <CustomerAccountPortal
+          activeTab={accountTab}
+          onSelectTab={(tab) => {
+            setAccountTab(tab)
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          onNavigate={(dest) => {
+            setAccountTab(null)
+            if (dest === 'home') {
+              setActiveNavTab('home')
+            } else {
+              setActiveNavTab('shop')
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          onBecomeSeller={() => {
+            if (onSwitchToSeller) onSwitchToSeller()
+            else onToast('Opening Merchant Onboarding & Seller Portal')
+          }}
+          onSellerLogin={() => {
+            if (onSwitchToSeller) onSwitchToSeller()
+            else onToast('Opening Seller Console')
+          }}
+          cart={cart}
+          wishlist={wishlist}
+          products={products}
+          recentOrders={allOrders}
+          onUpdateCartQuantity={updateCartQuantity}
+          onRemoveFromCart={removeFromCart}
+          onAddToCart={(prod, qty) => addToCart(prod, qty)}
+          onToggleWishlist={toggleWishlist}
+          onOpenCheckout={() => setIsCheckoutOpen(true)}
+          onTrackOrder={(orderNum) => {
+            if (orderNum) {
+              setTrackQuery(orderNum)
+              handleSearchOrder(orderNum)
+            }
+            setIsTrackModalOpen(true)
+          }}
+          onToast={onToast}
+        />
+      ) : activeNavTab === 'shop' ? (
         /* SHOP CATALOG VIEW MATCHING USER SCREENSHOT */
         <section id="shop-catalog-section" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full flex-1">
           <div className="flex flex-col md:flex-row gap-6 lg:gap-8 items-start">
@@ -1797,11 +1907,8 @@ export function ShoppingDashboard({
                   <button
                     type="button"
                     onClick={() => {
-                      if (wishlist.length === 0) {
-                        onToast('Your wishlist is empty. Tap ♡ on any product to save it!')
-                      } else {
-                        onToast(`You have ${wishlist.length} saved item(s) in your wishlist`)
-                      }
+                      setAccountTab('wishlist')
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
                     }}
                     className="hover:text-white transition-colors cursor-pointer"
                   >
@@ -1811,7 +1918,10 @@ export function ShoppingDashboard({
                 <li>
                   <button
                     type="button"
-                    onClick={() => setIsTrackModalOpen(true)}
+                    onClick={() => {
+                      setAccountTab('orders')
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
                     className="hover:text-white transition-colors cursor-pointer"
                   >
                     My Orders
@@ -1820,7 +1930,10 @@ export function ShoppingDashboard({
                 <li>
                   <button
                     type="button"
-                    onClick={() => setIsCartOpen(true)}
+                    onClick={() => {
+                      setAccountTab('cart')
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
                     className="hover:text-white transition-colors cursor-pointer"
                   >
                     Cart ({totalCartItems})
@@ -1860,7 +1973,10 @@ export function ShoppingDashboard({
                 <li>
                   <button
                     type="button"
-                    onClick={() => setIsUserMenuOpen(true)}
+                    onClick={() => {
+                      setAccountTab('profile')
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
                     className="hover:text-white transition-colors cursor-pointer"
                   >
                     Profile

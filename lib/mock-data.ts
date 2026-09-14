@@ -71,6 +71,33 @@ export interface SellerProfile {
   }[]
 }
 
+export interface CustomerAddress {
+  id: string
+  title: string
+  street: string
+  city: string
+  state: string
+  zip: string
+  country: string
+  isDefault: boolean
+}
+
+export interface CustomerProfile {
+  name: string
+  username: string
+  email: string
+  phone: string
+  avatarLetter: string
+  role: string
+  addresses: CustomerAddress[]
+  notifications: {
+    emailAlerts: boolean
+    orderUpdates: boolean
+    promotions: boolean
+    inAppAlerts: boolean
+  }
+}
+
 export const shopCategories = [
   'All',
   'Under Garments',
@@ -788,3 +815,41 @@ export const initialSellerProfile: SellerProfile = {
     }
   ]
 }
+
+export const defaultCustomerProfile: CustomerProfile = {
+  name: 'Emily Davis',
+  username: 'usellerstore_customer',
+  email: 'usellerstore.us@gmail.com',
+  phone: '+1 (555) 482-9912',
+  avatarLetter: 'U',
+  role: 'Customer account',
+  addresses: [
+    {
+      id: 'addr-1',
+      title: 'Home Address (Default)',
+      street: '452 Broadway Ave, Suite 4B',
+      city: 'New York',
+      state: 'NY',
+      zip: '10013',
+      country: 'United States',
+      isDefault: true,
+    },
+    {
+      id: 'addr-2',
+      title: 'Office / Business',
+      street: '742 Evergreen Terrace',
+      city: 'San Francisco',
+      state: 'CA',
+      zip: '94107',
+      country: 'United States',
+      isDefault: false,
+    },
+  ],
+  notifications: {
+    emailAlerts: true,
+    orderUpdates: true,
+    promotions: false,
+    inAppAlerts: true,
+  },
+}
+
