@@ -46,7 +46,8 @@ import {
   Package,
   Bell,
   User,
-  LogOut
+  LogOut,
+  FileText
 } from 'lucide-react'
 import {
   initialProducts,
@@ -68,6 +69,7 @@ import { BalanceModal } from '@/components/seller/BalanceModal'
 import { SupportChatModal } from '@/components/seller/SupportChatModal'
 import { ShoppingDashboard } from '@/components/shop/ShoppingDashboard'
 import { BrandLogo } from '@/components/ui/BrandLogo'
+import { AdminOrdersView } from '@/components/admin/AdminOrdersView'
 import {
   fetchProducts,
   createProduct,
@@ -103,6 +105,7 @@ const adminNav = [
   { label: 'Support', icon: HeartPulse, group: 'Communication' },
   { label: 'Withdrawals', icon: WalletCards, group: 'Finance' },
   { label: 'Recent Actions', icon: Activity, group: 'Activity' },
+  { label: 'My Logs', icon: FileText, group: 'Activity' },
 ]
 
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
@@ -226,22 +229,30 @@ function AdminSidebar({
 
 function AdminPanel({
   orders,
+  products,
+  sellerProfile,
   onUpdateOrderStatus,
   onDeleteOrder,
+  onCreateOrder,
   onCreateDemoOrder,
   onToast,
   onSignOut,
   onSwitchToSeller,
+  initialTab = 'Dashboard',
 }: {
   orders: Order[]
+  products?: Product[]
+  sellerProfile?: SellerProfile
   onUpdateOrderStatus?: (orderId: string, newStatus: Order['status']) => void
   onDeleteOrder?: (orderId: string) => void
+  onCreateOrder?: (newOrder: Order) => Promise<void> | void
   onCreateDemoOrder?: () => void
   onToast: (message: string) => void
   onSignOut: () => void
   onSwitchToSeller: () => void
+  initialTab?: string
 }) {
-  const [active, setActive] = useState('Dashboard')
+  const [active, setActive] = useState(initialTab)
   const [search, setSearch] = useState('')
   const [deleted, setDeleted] = useState(false)
   const [menu, setMenu] = useState(false)
@@ -293,13 +304,14 @@ function AdminPanel({
           </button>
         </div>
 
-        <div className="admin-topbar hidden md:flex">
-          <div className="admin-heading">
-            <span className="section-mark">
-              <ShieldCheck size={22} />
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
+        {active !== 'Orders' && (
+          <div className="admin-topbar hidden md:flex">
+            <div className="admin-heading">
+              <span className="section-mark">
+                <ShieldCheck size={22} />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
                 <h1 className="m-0 text-xl font-bold text-slate-900">{active}</h1>
                 <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
                   Management Console
@@ -323,6 +335,7 @@ function AdminPanel({
             </button>
           </div>
         </div>
+        )}
 
         <div className="p-6 space-y-6">
           {active === 'Dashboard' && (
@@ -664,18 +677,43 @@ function AdminPanel({
           )}
 
           {active === 'Orders' && (
-            <div className="panel p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-              <div className="mb-4">
-                <h2 className="text-lg font-bold text-slate-900 m-0">Platform Orders & False Order Control</h2>
-                <p className="text-xs text-slate-500 mt-1 m-0">Review merchant transactions, cancel suspicious orders, and permanently delete false test orders.</p>
+            <AdminOrdersView
+              orders={orders}
+              products={products || initialProducts}
+              sellerProfile={sellerProfile || initialSellerProfile}
+              onUpdateOrderStatus={onUpdateOrderStatus || (() => {})}
+              onDeleteOrder={onDeleteOrder || (() => {})}
+              onCreateOrder={onCreateOrder || onCreateDemoOrder || (() => {})}
+              onToast={onToast}
+              onSwitchToSeller={onSwitchToSeller}
+            />
+          )}
+
+          {active === 'My Logs' && (
+            <div className="panel p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-3">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 m-0">Administrator Action Logs</h2>
+                  <p className="text-xs text-slate-500 m-0 mt-0.5">Security audit trail of platform modifications and order overrides</p>
+                </div>
+                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Audit Logging Active
+                </span>
               </div>
-              <OrdersView
-                orders={orders}
-                onCreateDemoOrder={onCreateDemoOrder}
-                onUpdateOrderStatus={onUpdateOrderStatus}
-                onDeleteOrder={onDeleteOrder}
-                onToast={onToast}
-              />
+              <div className="space-y-2 text-xs font-mono">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                  <span className="text-slate-700 font-semibold">[ORDER_UPDATE] Order status updated to &apos;on_the_way&apos;</span>
+                  <span className="text-slate-400">Just now</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                  <span className="text-slate-700 font-semibold">[MERCHANT_SYNC] Verified seller state &amp; inventory check passed</span>
+                  <span className="text-slate-400">12 min ago</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                  <span className="text-slate-700 font-semibold">[SETTLEMENT] Merchant payout threshold calculated</span>
+                  <span className="text-slate-400">1 hour ago</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -2024,8 +2062,11 @@ export default function Page() {
       ) : mode === 'admin' ? (
         <AdminPanel
           orders={orders}
+          products={products}
+          sellerProfile={profile}
           onUpdateOrderStatus={handleUpdateOrderStatus}
           onDeleteOrder={handleDeleteOrder}
+          onCreateOrder={handleCreateOrderFromShop}
           onCreateDemoOrder={handleCreateDemoOrder}
           onToast={showToast}
           onSignOut={signOut}
