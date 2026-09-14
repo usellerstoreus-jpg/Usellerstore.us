@@ -118,6 +118,7 @@ export default function ShopPage() {
       <ShoppingDashboard
         products={products}
         sellerProfile={profile}
+        initialNavTab="shop"
         onPlaceOrder={handlePlaceOrder}
         onSwitchToSeller={() => router.push('/')}
         onSwitchToAdmin={() => router.push('/')}

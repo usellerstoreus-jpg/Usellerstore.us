@@ -40,12 +40,13 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react'
-import { Product, Order, SellerProfile } from '@/lib/mock-data'
+import { Product, Order, SellerProfile, shopCategories } from '@/lib/mock-data'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 
 export interface ShoppingDashboardProps {
   products: Product[]
   sellerProfile: SellerProfile
+  initialNavTab?: 'home' | 'shop' | 'categories'
   onPlaceOrder?: (order: Order) => Promise<void> | void
   onSwitchToSeller?: () => void
   onSwitchToAdmin?: () => void
@@ -172,18 +173,20 @@ const visualCategories = [
 export function ShoppingDashboard({
   products,
   sellerProfile,
+  initialNavTab = 'shop',
   onPlaceOrder,
   onSwitchToSeller,
   onSwitchToAdmin,
   onToast,
 }: ShoppingDashboardProps) {
   // Navigation & Carousel State
+  const [activeNavTab, setActiveNavTab] = useState<'home' | 'shop' | 'categories'>(initialNavTab)
   const [currentSlide, setCurrentSlide] = useState(1) // Default to slide 2 ("02 / 06 - Made for everyday comfort")
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [priceRange, setPriceRange] = useState<string>('all')
   const [inStockOnly, setInStockOnly] = useState<boolean>(false)
-  const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'rating' | 'newest'>('featured')
+  const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'rating' | 'newest'>('newest')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
 
@@ -302,8 +305,7 @@ export function ShoppingDashboard({
       .sort((a, b) => {
         if (sortBy === 'price-asc') return Number(a.sell) - Number(b.sell)
         if (sortBy === 'price-desc') return Number(b.sell) - Number(a.sell)
-        if (sortBy === 'newest') return b.id.localeCompare(a.id)
-        if (sortBy === 'rating') return Number(b.stock) - Number(a.stock)
+        if (sortBy === 'rating') return (Number(b.rating) || 0) - (Number(a.rating) || 0)
         return 0
       })
   }, [products, searchQuery, selectedCategory, priceRange, inStockOnly, sortBy])
@@ -519,19 +521,27 @@ export function ShoppingDashboard({
           {/* Logo & Main Nav Links */}
           <div className="flex items-center gap-6 lg:gap-8 shrink-0">
             {/* Official U Seller Store Logo */}
-            <BrandLogo size="md" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+            <BrandLogo size="md" onClick={() => {
+              setActiveNavTab('shop')
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }} />
 
             {/* Navigation Links */}
-            <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-700" aria-label="Main Store Navigation">
+            <nav className="hidden md:flex items-center gap-6 text-sm font-semibold" aria-label="Main Store Navigation">
               <button
                 type="button"
                 id="nav-link-home"
                 onClick={() => {
+                  setActiveNavTab('home')
                   setSelectedCategory('All')
                   setSearchQuery('')
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
-                className="text-[#0F52BA] font-bold hover:opacity-80 transition-opacity cursor-pointer"
+                className={`transition-colors cursor-pointer ${
+                  activeNavTab === 'home'
+                    ? 'text-slate-950 font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
                 Home
               </button>
@@ -539,10 +549,14 @@ export function ShoppingDashboard({
                 type="button"
                 id="nav-link-shop"
                 onClick={() => {
-                  const el = document.getElementById('all-products-section')
-                  el?.scrollIntoView({ behavior: 'smooth' })
+                  setActiveNavTab('shop')
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
-                className="hover:text-slate-900 transition-colors cursor-pointer"
+                className={`transition-colors cursor-pointer ${
+                  activeNavTab === 'shop'
+                    ? 'text-slate-950 font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
                 Shop
               </button>
@@ -550,10 +564,10 @@ export function ShoppingDashboard({
                 type="button"
                 id="nav-link-categories"
                 onClick={() => {
-                  const el = document.getElementById('categories-section')
-                  el?.scrollIntoView({ behavior: 'smooth' })
+                  setActiveNavTab('shop')
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
-                className="hover:text-slate-900 transition-colors cursor-pointer"
+                className="text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
               >
                 Categories
               </button>
@@ -722,12 +736,199 @@ export function ShoppingDashboard({
         </div>
       </header>
 
-      {/* 2. HERO LIFESTYLE CAROUSEL (Matching "02 / 06 - Made for everyday comfort") */}
-      <section className="relative w-full bg-[#EAE5DF] overflow-hidden min-h-[440px] sm:min-h-[500px] lg:min-h-[560px] flex items-center">
-        {/* Background Image with Smooth Ambient Overlay */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src={activeSlideData.image}
+      {activeNavTab === 'shop' ? (
+        /* SHOP CATALOG VIEW MATCHING USER SCREENSHOT */
+        <section id="shop-catalog-section" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full flex-1">
+          <div className="flex flex-col md:flex-row gap-6 lg:gap-8 items-start">
+            {/* Left Sidebar: Categories (Matching Screenshot) */}
+            <aside className="w-full md:w-52 lg:w-56 shrink-0">
+              <div className="sticky top-24 space-y-2">
+                <h3 className="text-base font-bold text-slate-900 tracking-tight px-1 mb-3">Categories</h3>
+                <div className="flex md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 scrollbar-none">
+                  {shopCategories.map((cat) => {
+                    const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase()
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        id={`shop-category-${cat.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm transition-all whitespace-nowrap cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#E2E8F0]/70 text-slate-900 font-semibold shadow-2xs'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </aside>
+
+            {/* Right Content: All Products (5002) + 6-Column Grid */}
+            <div className="flex-1 min-w-0 w-full space-y-5">
+              {/* Header: All Products (5002) and Sort Dropdown */}
+              <div className="flex items-center justify-between pb-3 pt-1 border-b border-slate-100">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-baseline gap-2">
+                  <span>{selectedCategory === 'All' ? 'All Products' : selectedCategory}</span>
+                  <span className="text-xs sm:text-sm font-normal text-slate-400">
+                    ({selectedCategory === 'All' && !searchQuery ? '5002' : filteredProducts.length})
+                  </span>
+                </h1>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    id="shop-sort-select"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="price-asc">Price: Low to High</option>
+                    <option value="price-desc">Price: High to Low</option>
+                    <option value="rating">Top Rated</option>
+                    <option value="featured">Featured</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 6-Column Responsive Product Cards Grid */}
+              {filteredProducts.length === 0 ? (
+                <div className="bg-slate-50 rounded-3xl border border-slate-200 p-12 text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center mx-auto text-slate-400">
+                    <ShoppingBag size={28} />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800">No matching products found</h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    Try adjusting your category or search term to discover more items from our catalog.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setSelectedCategory('All')
+                    }}
+                    className="px-5 py-2.5 bg-[#0F52BA] text-white rounded-full text-xs font-bold shadow-xs cursor-pointer hover:bg-blue-700"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-3.5">
+                  {filteredProducts.map((product) => {
+                    const isWishlisted = wishlist.includes(product.id)
+                    const inStock = Number(product.stock) > 0
+                    const discount =
+                      product.discountPercent ||
+                      (product.originalPrice
+                        ? Math.round(((product.originalPrice - Number(product.sell)) / product.originalPrice) * 100)
+                        : 0)
+                    const origPrice = product.originalPrice
+                    const ratingVal = product.rating || 4.7
+                    const reviewNum = product.reviewCount || 26
+
+                    return (
+                      <div
+                        key={product.id}
+                        id={`product-card-${product.id}`}
+                        className="group bg-white rounded-2xl border border-slate-200/80 hover:border-blue-400 hover:shadow-xl transition-all duration-300 p-3 flex flex-col justify-between relative"
+                      >
+                        {/* Image & Badges Container */}
+                        <div className="relative mb-2">
+                          {discount > 0 && (
+                            <span className="absolute top-0.5 left-0.5 z-10 bg-[#E67E22] text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow-2xs">
+                              -{discount}%
+                            </span>
+                          )}
+
+                          <div
+                            className="aspect-square w-full bg-white rounded-xl overflow-hidden flex items-center justify-center cursor-pointer p-1"
+                            onClick={() => setQuickViewProduct(product)}
+                          >
+                            <img
+                              src={product.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80'}
+                              alt={product.title}
+                              loading="lazy"
+                              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                            />
+                          </div>
+
+                          {/* Wishlist Heart Button on bottom-right of image */}
+                          <button
+                            type="button"
+                            onClick={(e) => toggleWishlist(product.id, e)}
+                            className="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-white/95 border border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:border-slate-300 shadow-2xs transition-all cursor-pointer"
+                            title={isWishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
+                          >
+                            <Heart size={13} className={isWishlisted ? 'fill-rose-500 text-rose-500' : ''} />
+                          </button>
+                        </div>
+
+                        {/* Product Title & Rating */}
+                        <div className="space-y-1 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h4
+                              onClick={() => setQuickViewProduct(product)}
+                              className="font-medium text-slate-800 text-xs hover:text-[#0F52BA] line-clamp-2 leading-relaxed min-h-[34px] cursor-pointer transition-colors"
+                              title={product.title}
+                            >
+                              {product.title}
+                            </h4>
+
+                            <div className="flex items-center gap-1 text-xs mt-1">
+                              <Star size={11} className="fill-amber-400 stroke-amber-400 text-amber-500 shrink-0" />
+                              <span className="font-bold text-slate-800 text-[11px]">{Number(ratingVal).toFixed(1)}</span>
+                              <span className="text-slate-400 text-[11px]">({reviewNum})</span>
+                            </div>
+                          </div>
+
+                          {/* Price & Add to Cart Circular Navy Button */}
+                          <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between gap-1">
+                            <div className="flex items-baseline gap-1 min-w-0 flex-wrap">
+                              <span className="font-black text-slate-900 text-xs sm:text-sm truncate">
+                                ${Number(product.sell).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              {origPrice && (
+                                <span className="text-[10px] text-slate-400 line-through font-normal shrink-0">
+                                  ${Number(origPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              id={`shop-cart-btn-${product.id}`}
+                              disabled={!inStock}
+                              onClick={(e) => addToCart(product, 1, e)}
+                              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                                inStock
+                                  ? 'bg-[#1E3A8A] hover:bg-[#0F52BA] text-white shadow-xs hover:scale-105 active:scale-95'
+                                  : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                              }`}
+                              title={inStock ? 'Add to cart' : 'Out of stock'}
+                            >
+                              <ShoppingCart size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : (
+        <>
+          {/* 2. HERO LIFESTYLE CAROUSEL (Matching "02 / 06 - Made for everyday comfort") */}
+          <section className="relative w-full bg-[#EAE5DF] overflow-hidden min-h-[440px] sm:min-h-[500px] lg:min-h-[560px] flex items-center">
+            {/* Background Image with Smooth Ambient Overlay */}
+            <div className="absolute inset-0 z-0">
+              <img
+                src={activeSlideData.image}
             alt={activeSlideData.title}
             className="w-full h-full object-cover object-center brightness-[0.88] transition-opacity duration-700"
           />
@@ -1061,6 +1262,8 @@ export function ShoppingDashboard({
           </div>
         )}
       </section>
+        </>
+      )}
 
       {/* Slide-out Shopping Cart Drawer */}
       {isCartOpen && (

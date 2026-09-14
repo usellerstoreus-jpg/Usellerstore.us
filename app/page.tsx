@@ -1848,6 +1848,7 @@ export default function Page() {
         <ShoppingDashboard
           products={products}
           sellerProfile={profile}
+          initialNavTab="shop"
           onPlaceOrder={handleCreateOrderFromShop}
           onSwitchToSeller={() => setMode('seller')}
           onSwitchToAdmin={() => setMode('admin')}
