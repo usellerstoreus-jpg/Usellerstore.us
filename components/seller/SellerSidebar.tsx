@@ -3,17 +3,12 @@
 import React from 'react'
 import {
   LayoutDashboard,
-  Package,
-  ShoppingBag,
+  Box,
+  CheckSquare,
   Bell,
   User,
   LogOut,
-  ShoppingCart,
-  X,
-  ShieldCheck,
-  CreditCard,
-  ExternalLink,
-  Store
+  X
 } from 'lucide-react'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 
@@ -53,9 +48,9 @@ export function SellerSidebar({
   }, [])
 
   const navItems = [
-    { id: 'Dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'Products' as const, label: 'Products', icon: Package },
-    { id: 'Orders' as const, label: 'Orders', icon: ShoppingBag },
+    { id: 'Dashboard' as const, label: 'Dashbord', icon: LayoutDashboard },
+    { id: 'Products' as const, label: 'Products', icon: Box },
+    { id: 'Orders' as const, label: 'Orders', icon: CheckSquare },
     { id: 'Notifications' as const, label: 'Notifications', icon: Bell, badge: unreadNotificationsCount },
     { id: 'Profile' as const, label: 'Profile', icon: User },
   ]
@@ -76,92 +71,70 @@ export function SellerSidebar({
         />
       )}
 
-      {/* Sidebar / Mobile Slide-Over Drawer */}
+      {/* Sidebar Matching Screenshot */}
       <aside
         className={`sidebar seller-sidebar ${
           isOpenOnMobile
-            ? 'fixed inset-y-0 left-0 z-50 flex shadow-2xl translate-x-0 transition-transform duration-300 ease-in-out w-[280px] bg-white border-r border-slate-200'
-            : 'hidden md:flex'
+            ? 'fixed inset-y-0 left-0 z-50 flex flex-col shadow-2xl translate-x-0 transition-transform duration-300 ease-in-out w-[260px] bg-white border-r border-slate-100'
+            : 'hidden md:flex flex-col w-60 lg:w-64 bg-white border-r border-slate-100/90 min-h-screen shrink-0'
         }`}
         aria-label="Seller Account Navigation"
       >
         {/* Brand Header */}
-        <div className="brand flex flex-col gap-2 p-4 border-b border-slate-100">
-          <div className="flex items-center justify-between">
-            <div
-              className="cursor-pointer group flex items-center"
-              onClick={() => handleSelect('Dashboard')}
-            >
-              <BrandLogo size="md" />
+        <div className="p-4 flex items-center justify-between">
+          <div
+            className="cursor-pointer flex items-center gap-3 min-w-0"
+            onClick={() => handleSelect('Dashboard')}
+          >
+            <BrandLogo size="md" showText={false} />
+            <div className="min-w-0">
+              <span suppressHydrationWarning className="font-bold text-slate-900 text-sm block leading-tight truncate">
+                {shopName}
+              </span>
+              <span suppressHydrationWarning className="text-xs text-slate-400 font-normal block leading-tight mt-0.5">
+                {ownerName}
+              </span>
             </div>
-
-            {/* Close button inside mobile drawer */}
-            {isOpenOnMobile && (
-              <button
-                type="button"
-                className="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 cursor-pointer"
-                onClick={onCloseMobile}
-                aria-label="Close menu"
-              >
-                <X size={20} />
-              </button>
-            )}
           </div>
 
-          <div className="flex items-center justify-between pt-1 border-t border-slate-100/80 text-xs">
-            <span suppressHydrationWarning className="font-semibold text-slate-700 truncate max-w-[170px]">{shopName}</span>
-            <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded">Seller</span>
-          </div>
-        </div>
-
-        {/* Visit Public Storefront Button */}
-        {onOpenStorefront && (
-          <div className="px-3 pt-3">
+          {/* Close button inside mobile drawer */}
+          {isOpenOnMobile && (
             <button
               type="button"
-              id="sidebar-view-storefront-btn"
-              onClick={() => {
-                if (onCloseMobile) onCloseMobile()
-                onOpenStorefront()
-              }}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-sky-50 hover:from-blue-100 hover:to-sky-100 text-blue-700 text-xs font-bold transition-all border border-blue-200/70 cursor-pointer shadow-2xs group"
+              className="md:hidden p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 cursor-pointer"
+              onClick={onCloseMobile}
+              aria-label="Close menu"
             >
-              <span className="flex items-center gap-2">
-                <Store size={15} className="text-blue-600 group-hover:scale-110 transition-transform" />
-                <span>Visit Storefront</span>
-              </span>
-              <span className="bg-blue-600 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                Live <ExternalLink size={9} />
-              </span>
+              <X size={20} />
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Balance Card matching usellerstore.com */}
-        <button
-          type="button"
-          className="balance-card-btn text-left w-auto m-3"
-          onClick={() => {
-            onBalanceClick()
-            if (onCloseMobile) onCloseMobile()
-          }}
-          title="Click to view shop balance & withdrawals"
-        >
-          <div className="balance-card rounded-2xl p-4 text-white shadow-md transition-all duration-200 hover:-translate-y-0.5">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-cyan-200">SHOP BALANCE</span>
-              <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full text-white font-semibold">USD</span>
+        {/* Blue Shop Balance Card Matching Screenshot */}
+        <div className="px-3 pt-1 pb-3">
+          <button
+            type="button"
+            className="w-full text-left bg-[#0E3D69] hover:bg-[#0B345A] transition-colors rounded-2xl p-4 text-white shadow-sm cursor-pointer"
+            onClick={() => {
+              onBalanceClick()
+              if (onCloseMobile) onCloseMobile()
+            }}
+            title="Click to view shop balance & withdrawals"
+          >
+            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-300">
+              SHOP BALANCE
             </div>
-            <strong suppressHydrationWarning className="text-2xl font-black block tabular-nums text-white">${balance.toFixed(2)}</strong>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/15 text-[11px] text-cyan-100">
-              <span suppressHydrationWarning>Guarantee: ${guarantee.toFixed(2)}</span>
-              <span className="text-white/80 underline font-semibold">Manage →</span>
+            <strong suppressHydrationWarning className="text-2xl font-bold block tabular-nums text-white my-0.5">
+              ${balance.toFixed(2)}
+            </strong>
+            <div className="text-xs text-slate-300 font-normal" suppressHydrationWarning>
+              Guarantee: ${guarantee.toFixed(2)}
             </div>
-          </div>
-        </button>
+          </button>
+        </div>
 
-        {/* Nav List */}
-        <nav className="side-nav flex-1 overflow-y-auto px-2 py-2 space-y-1" aria-label="Seller menu">
+        {/* Nav List Matching Screenshot */}
+        <nav className="flex-1 overflow-y-auto px-3 py-1 space-y-1" aria-label="Seller menu">
           {navItems.map(({ id, label, icon: Icon, badge }) => {
             const isActive = activeTab === id
             return (
@@ -169,17 +142,17 @@ export function SellerSidebar({
                 key={id}
                 type="button"
                 id={`seller-nav-${id.toLowerCase()}`}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer ${
                   isActive
-                    ? 'bg-blue-50 text-blue-700 font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'bg-[#EEF2F6] text-slate-900 font-semibold'
+                    : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900 font-medium'
                 }`}
                 onClick={() => handleSelect(id)}
               >
                 <Icon
-                  size={19}
+                  size={18}
                   className={`shrink-0 transition-colors ${
-                    isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'
+                    isActive ? 'text-slate-900' : 'text-slate-500'
                   }`}
                 />
                 <span className="truncate">{label}</span>
@@ -196,12 +169,12 @@ export function SellerSidebar({
           })}
         </nav>
 
-        {/* Sign Out Button */}
+        {/* Sign Out Button Matching Screenshot */}
         <div className="p-3 border-t border-slate-100 mt-auto">
           <button
             type="button"
             id="seller-sign-out-btn"
-            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
             onClick={() => {
               if (onCloseMobile) onCloseMobile()
               onSignOutClick()
