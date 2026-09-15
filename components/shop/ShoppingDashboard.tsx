@@ -884,7 +884,7 @@ export function ShoppingDashboard({
                 <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-baseline gap-2">
                   <span>{selectedCategory === 'All' ? 'All Products' : selectedCategory}</span>
                   <span className="text-xs sm:text-sm font-normal text-slate-400">
-                    ({selectedCategory === 'All' && !searchQuery ? '5002' : filteredProducts.length})
+                    ({filteredProducts.length})
                   </span>
                 </h1>
 

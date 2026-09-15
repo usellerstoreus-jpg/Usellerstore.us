@@ -124,14 +124,26 @@ export async function fetchProducts(): Promise<Product[] | null> {
       status: row.status as Product['status'],
     }))
 
-    // Keep localStorage synchronized with live database
+    // Keep localStorage synchronized with live database, merging any local additions
+    let combined = mapped
     try {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('u_seller_products', JSON.stringify(mapped))
+        const stored = localStorage.getItem('u_seller_products')
+        if (stored) {
+          const localList: Product[] = JSON.parse(stored)
+          if (Array.isArray(localList)) {
+            const dataIds = new Set(mapped.map((m) => m.id))
+            const localOnly = localList.filter((l) => !dataIds.has(l.id))
+            if (localOnly.length > 0) {
+              combined = [...localOnly, ...mapped]
+            }
+          }
+        }
+        localStorage.setItem('u_seller_products', JSON.stringify(combined))
       }
     } catch {}
 
-    return mapped
+    return combined
   } catch (err) {
     console.warn('[Supabase] Error fetching products:', err)
     try {
@@ -144,9 +156,13 @@ export async function fetchProducts(): Promise<Product[] | null> {
   }
 }
 
-export async function createProduct(product: Omit<Product, 'id'> & { id?: string }): Promise<Product | null> {
+export async function createProduct(product: Omit<Product, 'id'>): Promise<Product | null> {
   const client = getSupabase()
-  const prodId = product.id || `prod-${Date.now()}`
+  const prodId = 'prod-' + Date.now() + '-' + Math.floor(Math.random() * 1000)
+
+  const defaultImage =
+    product.image ||
+    'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=500&q=80'
 
   const newProduct: Product = {
     ...product,
@@ -155,16 +171,20 @@ export async function createProduct(product: Omit<Product, 'id'> & { id?: string
     sell: Number(product.sell),
     profit: Number(product.profit),
     stock: Number(product.stock),
+    image: defaultImage,
+    status: product.status || 'active',
   }
 
+  // Always save to localStorage first for instant responsiveness & offline resilience
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('u_seller_products')
+      const list: Product[] = stored ? JSON.parse(stored) : []
+      localStorage.setItem('u_seller_products', JSON.stringify([newProduct, ...list.filter((p) => p.id !== prodId)]))
+    }
+  } catch {}
+
   if (!client) {
-    try {
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('u_seller_products')
-        const list: Product[] = stored ? JSON.parse(stored) : []
-        localStorage.setItem('u_seller_products', JSON.stringify([newProduct, ...list.filter((p) => p.id !== prodId)]))
-      }
-    } catch {}
     return newProduct
   }
 
@@ -178,17 +198,17 @@ export async function createProduct(product: Omit<Product, 'id'> & { id?: string
         cost: newProduct.cost,
         sell: newProduct.sell,
         profit: newProduct.profit,
-        image: newProduct.image || '',
+        image: newProduct.image,
         stock: newProduct.stock,
         sku: newProduct.sku || '',
-        status: newProduct.status || 'active',
+        status: newProduct.status,
       })
       .select()
       .single()
 
     if (error) {
-      console.warn('[Supabase] Failed to insert product:', error.message)
-      return null
+      console.warn('[Supabase] Failed to insert product in DB, preserving local copy:', error.message)
+      return newProduct
     }
 
     const createdProduct: Product = {
@@ -198,7 +218,7 @@ export async function createProduct(product: Omit<Product, 'id'> & { id?: string
       cost: Number(data.cost),
       sell: Number(data.sell),
       profit: Number(data.profit),
-      image: data.image || '',
+      image: data.image || newProduct.image,
       stock: Number(data.stock),
       sku: data.sku || '',
       status: data.status,
@@ -209,14 +229,17 @@ export async function createProduct(product: Omit<Product, 'id'> & { id?: string
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('u_seller_products')
         const list: Product[] = stored ? JSON.parse(stored) : []
-        localStorage.setItem('u_seller_products', JSON.stringify([createdProduct, ...list.filter((p) => p.id !== createdProduct.id)]))
+        localStorage.setItem(
+          'u_seller_products',
+          JSON.stringify([createdProduct, ...list.filter((p) => p.id !== prodId && p.id !== createdProduct.id)])
+        )
       }
     } catch {}
 
     return createdProduct
   } catch (err) {
-    console.warn('[Supabase] Error creating product:', err)
-    return null
+    console.warn('[Supabase] Error creating product, preserving local copy:', err)
+    return newProduct
   }
 }
 

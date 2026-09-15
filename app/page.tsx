@@ -1530,13 +1530,53 @@ export default function Page() {
   }
 
   const handleAddProduct = async (newProd: Omit<Product, 'id'>) => {
-    const created = await createProduct(newProd)
-    if (created) {
-      setProducts((prev) => [created, ...prev.filter((p) => p.id !== created.id)])
-      showToast(`Product "${created.title.slice(0, 24)}..." added permanently`)
-    } else {
-      showToast('Failed to save product to database')
+    const fallbackImage =
+      newProd.image ||
+      'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=500&q=80'
+
+    const fullProd = {
+      ...newProd,
+      image: fallbackImage,
     }
+
+    const created = await createProduct(fullProd)
+    const productToAdd: Product = created || {
+      ...fullProd,
+      id: 'prod-' + Date.now(),
+      cost: Number(fullProd.cost),
+      sell: Number(fullProd.sell),
+      profit: Number(fullProd.profit),
+      stock: Number(fullProd.stock),
+      sku: fullProd.sku || 'SKU-' + Math.floor(1000 + Math.random() * 9000),
+      status: 'active',
+    }
+
+    // Immediately update store products state so it appears in both Seller & Customer Storefront
+    setProducts((prev) => {
+      const updated = [productToAdd, ...prev.filter((p) => p.id !== productToAdd.id)]
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('u_seller_products', JSON.stringify(updated))
+        }
+      } catch {}
+      return updated
+    })
+
+    // Update active catalog items count in seller profile
+    setProfile((prev) => {
+      const updated = {
+        ...prev,
+        activeItemsCount: (prev.activeItemsCount || 0) + 1,
+      }
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('u_seller_active_profile', JSON.stringify(updated))
+        }
+      } catch {}
+      return updated
+    })
+
+    showToast(`Product "${productToAdd.title.slice(0, 24)}..." added to store!`)
   }
 
   const handleUpdateProduct = async (updated: Product) => {
