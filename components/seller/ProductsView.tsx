@@ -286,57 +286,75 @@ export function ProductsView({
 
       {/* Add Product Modal */}
       {isAddModalOpen && (
-        <div className="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
-          <div className="modal-content bg-white rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-100 max-h-[88vh] overflow-y-auto">
-            <div className="flex justify-between items-center pb-4 border-b border-slate-100 mb-5">
+        <div className="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="modal-content bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Plus size={20} />
+                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Plus size={16} className="stroke-[2.5]" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg text-slate-900">Add New Product</h3>
-                  <p className="text-xs text-slate-500">Add a product to your seller catalog</p>
+                  <h3 className="font-extrabold text-base text-slate-900 tracking-tight leading-tight m-0">
+                    Add New Product
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium m-0 mt-0.5">
+                    Add a product to your seller catalog
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                 onClick={() => setIsAddModalOpen(false)}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveNewProduct} className="space-y-4">
+            <form onSubmit={handleSaveNewProduct} className="space-y-3.5">
+              {/* Product Title */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Product Title *
+                <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-1.5">
+                  PRODUCT TITLE *
                 </label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Ergonomic Memory Foam Cushion..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 />
               </div>
 
+              {/* Category & Initial Stock */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Category
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-1.5">
+                    CATEGORY
                   </label>
                   <select
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   >
                     <option value="Home & Kitchen">Home & Kitchen</option>
-                    <option value="Health & Wellness">Health & Wellness</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Tablets">Tablets</option>
                     <option value="Under Garments">Under Garments</option>
+                    <option value="Clothes">Clothes</option>
+                    <option value="Women Clothes">Women Clothes</option>
+                    <option value="Remotes">Remotes</option>
+                    <option value="Women Accessories">Women Accessories</option>
+                    <option value="Bags">Bags</option>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Laptops">Laptops</option>
+                    <option value="Tablets">Tablets</option>
+                    <option value="Mobiles & Accessories">Mobiles & Accessories</option>
+                    <option value="Headphones & Audio">Headphones & Audio</option>
+                    <option value="Keyboards & Mice">Keyboards & Mice</option>
+                    <option value="Health & Wellness">Health & Wellness</option>
+                    <option value="Fashion">Fashion</option>
+                    <option value="Beauty & Personal Care">Beauty & Personal Care</option>
                     <option value="Toys & Games">Toys & Games</option>
                     <option value="Sports & Outdoors">Sports & Outdoors</option>
                     <option value="Pet Supplies">Pet Supplies</option>
@@ -344,76 +362,79 @@ export function ProductsView({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Initial Stock
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-1.5">
+                    INITIAL STOCK
                   </label>
                   <input
                     type="number"
                     min="0"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     value={formData.stock}
                     onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
                   />
                 </div>
               </div>
 
+              {/* Cost Price & Sell Price */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Cost Price ($)
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-1.5">
+                    COST PRICE ($)
                   </label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     required
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     value={formData.cost}
                     onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) || 0 })}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Sell Price ($)
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-1.5">
+                    SELL PRICE ($)
                   </label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     required
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     value={formData.sell}
                     onChange={(e) => setFormData({ ...formData, sell: parseFloat(e.target.value) || 0 })}
                   />
                 </div>
               </div>
 
-              {/* Profit preview banner */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex justify-between items-center text-sm">
-                <span className="font-semibold text-emerald-800">Estimated Profit per Unit:</span>
-                <span className="font-extrabold text-emerald-700 text-base">
-                  +${Math.max(0, formData.sell - formData.cost).toFixed(2)}
+              {/* Estimated Profit Banner */}
+              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 flex justify-between items-center text-xs">
+                <span className="font-bold text-emerald-800">Estimated Profit per Unit:</span>
+                <span className="font-black text-emerald-600 text-sm">
+                  +${Math.max(0, (formData.sell || 0) - (formData.cost || 0)).toFixed(2)}
                 </span>
               </div>
 
+              {/* Product Image */}
               <ProductImageUploader
                 value={formData.image}
                 onChange={(url) => setFormData({ ...formData, image: url })}
                 onToast={onToast}
               />
 
-              <div className="flex gap-3 pt-3">
+              {/* Footer Buttons */}
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs sm:text-sm cursor-pointer transition-colors"
                   onClick={() => setIsAddModalOpen(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm shadow-md"
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md hover:shadow-lg transition-all cursor-pointer"
                 >
                   Add to Store
                 </button>

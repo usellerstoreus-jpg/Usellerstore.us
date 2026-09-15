@@ -96,16 +96,16 @@ export function ProductImageUploader({
   return (
     <div className="product-image-uploader space-y-2">
       <div className="flex items-center justify-between">
-        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-          Product Image
+        <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+          PRODUCT IMAGE
         </label>
-        <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+        <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl text-[11px] font-semibold">
           <button
             type="button"
             onClick={() => setMode('upload')}
-            className={`px-2.5 py-1 rounded-md transition-all ${
+            className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
               mode === 'upload'
-                ? 'bg-white text-blue-600 shadow-xs'
+                ? 'bg-white text-blue-600 font-bold shadow-2xs border border-slate-200/60'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -114,9 +114,9 @@ export function ProductImageUploader({
           <button
             type="button"
             onClick={() => setMode('url')}
-            className={`px-2.5 py-1 rounded-md transition-all ${
+            className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
               mode === 'url'
-                ? 'bg-white text-blue-600 shadow-xs'
+                ? 'bg-white text-blue-600 font-bold shadow-2xs border border-slate-200/60'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -164,7 +164,7 @@ export function ProductImageUploader({
                     type="button"
                     disabled={isUploading}
                     onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {isUploading ? (
                       <Loader2 size={12} className="animate-spin text-blue-600" />
@@ -176,7 +176,7 @@ export function ProductImageUploader({
                   <button
                     type="button"
                     onClick={() => onChange('')}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                   >
                     <X size={13} />
                     <span>Remove</span>
@@ -185,7 +185,7 @@ export function ProductImageUploader({
               </div>
             </div>
           ) : (
-            /* Dropzone Empty State */
+            /* Dropzone Empty State matching screenshot */
             <div
               onDragOver={(e) => {
                 e.preventDefault()
@@ -194,32 +194,32 @@ export function ProductImageUploader({
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
+              className={`border-2 border-dashed rounded-3xl p-7 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1 ${
                 isDragging
                   ? 'border-blue-500 bg-blue-50/50 scale-[0.99]'
-                  : 'border-slate-300 hover:border-blue-400 bg-slate-50/70 hover:bg-slate-50'
+                  : 'border-blue-200 hover:border-blue-300 bg-white'
               } ${isUploading ? 'pointer-events-none opacity-60' : ''}`}
             >
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50/80 text-blue-600 flex items-center justify-center shadow-2xs mb-1">
                 {isUploading ? (
                   <Loader2 size={24} className="animate-spin text-blue-600" />
                 ) : (
-                  <UploadCloud size={24} />
+                  <UploadCloud size={24} className="stroke-[2.2]" />
                 )}
               </div>
 
               <div>
-                <p className="text-xs font-bold text-slate-700">
+                <p className="text-xs font-bold text-slate-800">
                   {isUploading
                     ? 'Uploading to Supabase Storage...'
                     : 'Click or drag image file here to upload'}
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
                   Supports PNG, JPG, JPEG, WEBP (up to 10MB)
                 </p>
               </div>
 
-              <span className="mt-1 px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 shadow-2xs">
+              <span className="mt-2.5 px-4 py-1.5 bg-white border border-slate-200/90 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors">
                 Browse Files
               </span>
             </div>
