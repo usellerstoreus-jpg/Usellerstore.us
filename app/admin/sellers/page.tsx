@@ -14,13 +14,9 @@ import {
   fetchProducts,
   fetchOrders,
   fetchSellerProfile,
-  createOrder,
-  updateOrderStatus,
-  deleteOrder,
-  updateSellerProfile,
 } from '@/lib/supabase/api'
 import { isSupabaseConfigured } from '@/lib/supabase/client'
-import { AdminOrdersView } from '@/components/admin/AdminOrdersView'
+import { AdminSellersView } from '@/components/admin/AdminSellersView'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import {
   Grid2X2,
@@ -52,12 +48,12 @@ const adminNav = [
   { label: 'My Logs', icon: FileText, group: 'Activity' },
 ]
 
-export default function AdminOrdersPage() {
+export default function AdminSellersPage() {
   const router = useRouter()
   const [orders, setOrders] = useState<Order[]>(initialOrders)
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [profile, setProfile] = useState<SellerProfile>(initialSellerProfile)
-  const [activeTab, setActiveTab] = useState('Orders')
+  const [activeTab, setActiveTab] = useState('Sellers')
   const [toast, setToast] = useState('')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
@@ -98,79 +94,11 @@ export default function AdminOrdersPage() {
         if (supaProds) setProducts(supaProds)
         if (supaProfile) setProfile(supaProfile)
       } catch (err) {
-        console.warn('[AdminOrders] Sync error:', err)
+        console.warn('[AdminSellers] Sync error:', err)
       }
     }
     syncSupabase()
   }, [])
-
-  const handleUpdateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
-    const order = orders.find((o) => o.id === orderId)
-    if (!order) return
-
-    // If order is moved to cancelled, reverse profit from seller balance
-    if (newStatus === 'cancelled' && order.status !== 'cancelled') {
-      const profitToDeduct = Number(order.profit) || 0
-      const newBalance = Number(Math.max(0, profile.balance - profitToDeduct).toFixed(2))
-      setProfile((prev) => ({ ...prev, balance: newBalance }))
-      await updateSellerProfile({ balance: newBalance })
-    } else if (order.status === 'cancelled' && newStatus !== 'cancelled') {
-      const profitToAdd = Number(order.profit) || 0
-      const newBalance = Number((profile.balance + profitToAdd).toFixed(2))
-      setProfile((prev) => ({ ...prev, balance: newBalance }))
-      await updateSellerProfile({ balance: newBalance })
-    }
-
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)))
-    await updateOrderStatus(orderId, newStatus)
-    showToast(`Order ${order.orderNumber} status updated to ${newStatus.replace(/_/g, ' ')}`)
-  }
-
-  const handleDeleteOrder = async (orderId: string) => {
-    const orderToDelete = orders.find((o) => o.id === orderId)
-    if (!orderToDelete) return
-
-    setOrders((prev) => prev.filter((o) => o.id !== orderId))
-
-    let newBalance = profile.balance
-    if (orderToDelete.status !== 'cancelled') {
-      const profitToDeduct = Number(orderToDelete.profit) || 0
-      newBalance = Number(Math.max(0, profile.balance - profitToDeduct).toFixed(2))
-    }
-    const newTotalOrders = Math.max(0, profile.totalOrders - 1)
-
-    setProfile((prev) => ({
-      ...prev,
-      balance: newBalance,
-      totalOrders: newTotalOrders,
-    }))
-
-    await Promise.all([
-      deleteOrder(orderId),
-      updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders }),
-    ])
-    showToast(`Order ${orderToDelete.orderNumber} removed from database`)
-  }
-
-  const handleCreateOrder = async (newOrder: Order) => {
-    const saved = await createOrder(newOrder)
-    const activeOrder = saved || newOrder
-
-    setOrders((prev) => [activeOrder, ...prev.filter((o) => o.id !== activeOrder.id)])
-
-    const profitToAdd = Number(activeOrder.profit) || 0
-    const newBalance = Number((profile.balance + profitToAdd).toFixed(2))
-    const newTotalOrders = profile.totalOrders + 1
-
-    setProfile((prev) => ({
-      ...prev,
-      balance: newBalance,
-      totalOrders: newTotalOrders,
-    }))
-
-    await updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders })
-    showToast(`Order ${activeOrder.orderNumber} dispatched! (+$${profitToAdd.toFixed(2)} profit)`)
-  }
 
   return (
     <div className="app-shell admin-shell min-h-screen flex flex-col md:flex-row bg-[#F8FAFC]">
@@ -211,7 +139,7 @@ export default function AdminOrdersPage() {
         {/* Administrator User Card */}
         <div className="admin-user p-4 flex items-center gap-3">
           <div className="avatar admin-avatar relative w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
-            Z<span className="online-dot absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white" />
+            z<span className="online-dot absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white" />
           </div>
           <div>
             <strong className="text-sm font-bold text-slate-900 block leading-tight">zain</strong>
@@ -252,9 +180,11 @@ export default function AdminOrdersPage() {
                   }`}
                   onClick={() => {
                     setActiveTab(label)
-                    if (label === 'Sellers') {
-                      router.push('/admin/sellers')
-                    } else if (label !== 'Orders') {
+                    if (label === 'Orders') {
+                      router.push('/admin/orders')
+                    } else if (label === 'Sellers') {
+                      // Already here
+                    } else {
                       router.push(`/?mode=admin&tab=${label}`)
                     }
                   }}
@@ -295,7 +225,7 @@ export default function AdminOrdersPage() {
             <BrandLogo size="sm" variant="light" showText={false} />
             <div>
               <strong className="text-xs font-bold text-white block leading-tight">Admin Console</strong>
-              <span className="text-[10px] text-purple-300 font-semibold">Orders</span>
+              <span className="text-[10px] text-purple-300 font-semibold">Sellers</span>
             </div>
           </div>
           <button
@@ -308,15 +238,12 @@ export default function AdminOrdersPage() {
         </div>
 
         <div className="p-4 sm:p-6 max-w-[1400px] mx-auto">
-          <AdminOrdersView
-            orders={orders}
+          <AdminSellersView
+            initialSeller={profile}
             products={products}
-            sellerProfile={profile}
-            onUpdateOrderStatus={handleUpdateOrderStatus}
-            onDeleteOrder={handleDeleteOrder}
-            onCreateOrder={handleCreateOrder}
+            orders={orders}
             onToast={showToast}
-            onSwitchToSeller={() => router.push('/')}
+            onSwitchToSeller={() => router.push('/?mode=seller')}
           />
         </div>
       </main>

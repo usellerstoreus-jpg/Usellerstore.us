@@ -46,6 +46,7 @@ export interface NotificationItem {
 }
 
 export interface SellerProfile {
+  id?: string
   shopName: string
   ownerName: string
   email: string
@@ -69,6 +70,23 @@ export interface SellerProfile {
     walletAddress?: string
     network?: string
   }[]
+  // Admin Management & Settings
+  isSuspended?: boolean
+  withdrawalsBlocked?: boolean
+  allowProductRemoval?: boolean
+  productLimit?: number | 'unlimited'
+  viewsBooster?: {
+    enabled: boolean
+    multiplier: number
+    extraDailyViews: number
+  }
+  isDeleted?: boolean
+  deletedAt?: string
+  lastActiveAgo?: string
+  joinedExact?: string
+  password?: string
+  reviewCount?: number
+  activeItemsCount?: number
 }
 
 export interface CustomerAddress {
@@ -136,9 +154,22 @@ export const initialSellerProfile: SellerProfile = {
   memberSince: 'Aug 2026',
   verified: true,
   active: true,
+  isSuspended: false,
+  withdrawalsBlocked: false,
+  allowProductRemoval: true,
+  productLimit: 'unlimited',
+  activeItemsCount: 504,
+  reviewCount: 504,
+  lastActiveAgo: '15h ago',
+  joinedExact: '7 Aug 2026',
+  viewsBooster: {
+    enabled: false,
+    multiplier: 1.0,
+    extraDailyViews: 0,
+  },
   seoTitle: 'tester Official Store - Premium Products & Quick Delivery',
   seoDescription: 'Shop top quality electronics, home goods, wellness and outdoor essentials from tester.',
-  avatarLetter: 'Z',
+  avatarLetter: 'T',
   payoutMethods: [
     {
       type: 'bank',

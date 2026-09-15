@@ -70,6 +70,7 @@ import { SupportChatModal } from '@/components/seller/SupportChatModal'
 import { ShoppingDashboard } from '@/components/shop/ShoppingDashboard'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { AdminOrdersView } from '@/components/admin/AdminOrdersView'
+import { AdminSellersView } from '@/components/admin/AdminSellersView'
 import {
   fetchProducts,
   createProduct,
@@ -483,107 +484,13 @@ function AdminPanel({
           )}
 
           {active === 'Sellers' && (
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                <label className="search-box flex-1 max-w-md w-full">
-                  <Search size={16} />
-                  <input
-                    aria-label="Search sellers"
-                    placeholder="Search merchant, owner, or email..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className={`toggle ${deleted ? 'on' : ''}`}
-                  onClick={() => setDeleted(!deleted)}
-                >
-                  <span>Show Suspended</span> <i />
-                </button>
-              </div>
-
-              <section className="seller-list p-0">
-                {sellerVisible && !deleted ? (
-                  <div className="seller-row">
-                    <div className="row-identity">
-                      <div className="avatar seller-avatar">
-                        T<span className="online-dot" />
-                      </div>
-                      <div>
-                        <strong>
-                          tester <em>Online</em>
-                        </strong>
-                        <span>zain55@gmail.com</span>
-                        <small>
-                          <CalendarDays size={13} /> Joined 7 Aug 2026
-                        </small>
-                      </div>
-                    </div>
-                    <div className="seller-rating">
-                      <b>★ 5.00</b>
-                      <span>500 Active Items</span>
-                    </div>
-                    <div className="seller-verification">
-                      <b>VERIFIED</b>
-                      <span>ACCOUNT TIER</span>
-                    </div>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSwitchToSeller()
-                          onToast('Switched to seller account dashboard')
-                        }}
-                      >
-                        <LogIn size={16} /> Login
-                      </button>
-                      <button
-                        type="button"
-                        className="more"
-                        onClick={() => setMenu(!menu)}
-                        aria-label="More seller actions"
-                      >
-                        <MoreVertical size={18} />
-                      </button>
-                      {menu && (
-                        <div className="more-menu">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onToast('Seller details opened')
-                              setMenu(false)
-                            }}
-                          >
-                            View details
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onToast('Seller status updated')
-                              setMenu(false)
-                            }}
-                          >
-                            Suspend seller
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="seller-balance">
-                      <span>BALANCE</span>
-                      <b>$0.00</b>
-                      <small>Guarantee $0.00</small>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="empty-state">
-                    <Search size={30} />
-                    <strong>No sellers found</strong>
-                    <span>Try adjusting your search criteria.</span>
-                  </div>
-                )}
-              </section>
-            </div>
+            <AdminSellersView
+              initialSeller={sellerProfile || initialSellerProfile}
+              products={products || initialProducts}
+              orders={orders || initialOrders}
+              onToast={onToast}
+              onSwitchToSeller={onSwitchToSeller}
+            />
           )}
 
           {active === 'KYC' && (
