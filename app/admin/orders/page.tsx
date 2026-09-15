@@ -77,10 +77,8 @@ export default function AdminOrdersPage() {
         const storedProducts = localStorage.getItem('u_seller_products')
         if (storedProducts) {
           const parsed = JSON.parse(storedProducts)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const existingIds = new Set(parsed.map((p: any) => p.id))
-            const newFromInitial = initialProducts.filter((p) => !existingIds.has(p.id))
-            setProducts([...newFromInitial, ...parsed])
+          if (Array.isArray(parsed)) {
+            setProducts(parsed)
           }
         }
         const storedProfile = localStorage.getItem('u_seller_active_profile')
@@ -97,11 +95,7 @@ export default function AdminOrdersPage() {
           fetchSellerProfile(),
         ])
         if (supaOrders) setOrders(supaOrders)
-        if (supaProds) {
-          const supaIds = new Set(supaProds.map((p) => p.id))
-          const newFromInitial = initialProducts.filter((p) => !supaIds.has(p.id))
-          setProducts([...newFromInitial, ...supaProds])
-        }
+        if (supaProds) setProducts(supaProds)
         if (supaProfile) setProfile(supaProfile)
       } catch (err) {
         console.warn('[AdminOrders] Sync error:', err)

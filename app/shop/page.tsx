@@ -36,10 +36,8 @@ export default function ShopPage() {
         const stored = localStorage.getItem('u_seller_products')
         if (stored) {
           const parsed = JSON.parse(stored)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const existingIds = new Set(parsed.map((p: any) => p.id))
-            const newFromInitial = initialProducts.filter((p) => !existingIds.has(p.id))
-            setProducts([...newFromInitial, ...parsed])
+          if (Array.isArray(parsed)) {
+            setProducts(parsed)
           }
         }
         const storedProfile = localStorage.getItem('u_seller_active_profile')
@@ -56,10 +54,8 @@ export default function ShopPage() {
           fetchProducts(),
           fetchSellerProfile(),
         ])
-        if (supaProds && supaProds.length > 0) {
-          const supaIds = new Set(supaProds.map((p) => p.id))
-          const newFromInitial = initialProducts.filter((p) => !supaIds.has(p.id))
-          setProducts([...newFromInitial, ...supaProds])
+        if (supaProds) {
+          setProducts(supaProds)
         }
         if (supaProfile) {
           setProfile(supaProfile)

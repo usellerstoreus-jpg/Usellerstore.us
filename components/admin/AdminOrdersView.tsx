@@ -71,110 +71,8 @@ interface ScheduleHistoryItem {
   }[]
 }
 
-const mockScheduleHistory: ScheduleHistoryItem[] = [
-  {
-    id: 'hist-1',
-    title: 'Delivered — 20 orders',
-    status: 'Failed',
-    target: 'Delivered',
-    dateStr: 'August 2nd, 2026 at 2:54 AM (1 month ago)',
-    timeStr: '2:55 AM',
-    totalOrders: 20,
-    successCount: 0,
-    failCount: 20,
-    retryCount: 0,
-    errors: Array.from({ length: 8 }).map((_, i) => ({
-      orderTitle: 'Order —',
-      target: 'completed',
-      errorMessage: 'operator does not exist: seller_order_status = text',
-      time: '2:55 AM',
-    })),
-  },
-  {
-    id: 'hist-2',
-    title: 'On the way — 20 orders',
-    status: 'Failed',
-    target: 'On the way',
-    dateStr: 'August 2nd, 2026 at 2:52 AM (1 month ago)',
-    timeStr: '2:52 AM',
-    totalOrders: 20,
-    successCount: 0,
-    failCount: 20,
-    retryCount: 0,
-    errors: Array.from({ length: 8 }).map((_, i) => ({
-      orderTitle: 'Order —',
-      target: 'completed',
-      errorMessage: 'operator does not exist: seller_order_status = text',
-      time: '2:52 AM',
-    })),
-  },
-  {
-    id: 'hist-3',
-    title: 'Delivered — 1 order',
-    status: 'Failed',
-    target: 'Delivered',
-    dateStr: 'July 27th, 2026 at 7:10 PM (2 months ago)',
-    timeStr: '7:11 PM',
-    totalOrders: 1,
-    successCount: 0,
-    failCount: 1,
-    retryCount: 0,
-    errors: [
-      {
-        orderTitle: 'Order —',
-        target: 'completed',
-        errorMessage: 'operator does not exist: seller_order_status = text',
-        time: '7:11 PM',
-      },
-    ],
-  },
-  {
-    id: 'hist-4',
-    title: 'On the way — 1 order',
-    status: 'Cancelled',
-    target: 'On the way',
-    dateStr: 'July 27th, 2026 at 8:10 PM (2 months ago)',
-    timeStr: '8:10 PM',
-    totalOrders: 1,
-    successCount: 0,
-    failCount: 0,
-    retryCount: 0,
-    errors: [],
-  },
-  {
-    id: 'hist-5',
-    title: 'On the way — 1 order',
-    status: 'Failed',
-    target: 'On the way',
-    dateStr: 'July 27th, 2026 at 7:07 PM (2 months ago)',
-    timeStr: '7:07 PM',
-    totalOrders: 1,
-    successCount: 0,
-    failCount: 1,
-    retryCount: 0,
-    errors: [
-      {
-        orderTitle: 'Order —',
-        target: 'completed',
-        errorMessage: 'operator does not exist: seller_order_status = text',
-        time: '7:07 PM',
-      },
-    ],
-  },
-  {
-    id: 'hist-6',
-    title: 'On the way — 3 orders',
-    status: 'Cancelled',
-    target: 'On the way',
-    dateStr: 'July 27th, 2026 at 10:04 PM (2 months ago)',
-    timeStr: '10:04 PM',
-    totalOrders: 3,
-    successCount: 0,
-    failCount: 0,
-    retryCount: 0,
-    errors: [],
-  },
-]
+const mockScheduleHistory: ScheduleHistoryItem[] = []
+
 
 export function AdminOrdersView({
   orders,
@@ -193,12 +91,12 @@ export function AdminOrdersView({
   const [copiedSeller, setCopiedSeller] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [checkedOrderIds, setCheckedOrderIds] = useState<string[]>([])
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>('ord-ec60cb68')
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(orders[0]?.id || null)
 
   // Schedules View state (Screenshots 3, 4, 5)
   const [isSchedulesViewActive, setIsSchedulesViewActive] = useState(false)
   const [schedulesSubTab, setSchedulesSubTab] = useState<'upcoming' | 'history'>('upcoming')
-  const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>('hist-1')
+  const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null)
 
   // Modals & Inspection (Screenshot 2)
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null)
@@ -221,14 +119,14 @@ export function AdminOrdersView({
   const [productSearch, setProductSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
 
-  // Step 4: Customer Details - default to Screenshot 1 & 2 values
-  const [fullName, setFullName] = useState('Usellerstore')
-  const [phone, setPhone] = useState('28288282')
-  const [address1, setAddress1] = useState('KCXASCJAI, FWEUFH')
-  const [address2, setAddress2] = useState('EFUWEF')
-  const [city, setCity] = useState('DIQWDJ')
-  const [stateName, setStateName] = useState('WDJI')
-  const [postalCode, setPostalCode] = useState('10001')
+  // Step 4: Customer Details
+  const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [address1, setAddress1] = useState('')
+  const [address2, setAddress2] = useState('')
+  const [city, setCity] = useState('')
+  const [stateName, setStateName] = useState('')
+  const [postalCode, setPostalCode] = useState('')
   const [country, setCountry] = useState('United States')
   const [creationTiming, setCreationTiming] = useState<'instant' | 'scheduled'>('instant')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -281,13 +179,13 @@ export function AdminOrdersView({
   const sellersList = useMemo(() => {
     const testerSeller = {
       id: 'tester',
-      shopName: 'tester',
-      ownerName: 'Zain',
-      avatarLetter: 'T',
+      shopName: sellerProfile.shopName || 'tester',
+      ownerName: sellerProfile.ownerName || 'Zain',
+      avatarLetter: sellerProfile.avatarLetter || 'Z',
       totalOrders: orders.length,
       pendingOrders: orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled').length,
       deliveredOrders: orders.filter((o) => o.status === 'delivered').length,
-      balance: sellerProfile.balance || 430.5,
+      balance: sellerProfile.balance || 0,
     }
 
     return [testerSeller]
@@ -1142,10 +1040,15 @@ export function AdminOrdersView({
             </div>
           )}
 
-          {/* History Tab (Screenshots 4 & 5) */}
+          {/* History Tab */}
           {schedulesSubTab === 'history' && (
             <div className="space-y-3">
-              {mockScheduleHistory.map((item) => {
+              {mockScheduleHistory.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200/90 p-16 text-center text-xs text-slate-500 bg-white/50 min-h-[300px] flex items-center justify-center shadow-xs">
+                  No automated schedule history yet. Pick orders and click Schedule status change.
+                </div>
+              ) : (
+                mockScheduleHistory.map((item) => {
                 const isExpanded = expandedScheduleId === item.id
                 return (
                   <div
@@ -1219,7 +1122,7 @@ export function AdminOrdersView({
                     )}
                   </div>
                 )
-              })}
+              }))}
             </div>
           )}
         </div>
