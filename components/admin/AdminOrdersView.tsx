@@ -25,7 +25,14 @@ import {
   ArrowLeft,
   Store,
   SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  ChevronUp,
+  Pencil,
+  ArrowLeftRight,
+  Phone,
+  MapPin,
+  User,
+  XCircle,
 } from 'lucide-react'
 import { Product, Order, SellerProfile, shopCategories } from '@/lib/mock-data'
 
@@ -45,6 +52,130 @@ interface SelectedItem {
   quantity: number
 }
 
+interface ScheduleHistoryItem {
+  id: string
+  title: string
+  status: 'Failed' | 'Cancelled'
+  target: string
+  dateStr: string
+  timeStr: string
+  totalOrders: number
+  successCount: number
+  failCount: number
+  retryCount: number
+  errors: {
+    orderTitle: string
+    target: string
+    errorMessage: string
+    time: string
+  }[]
+}
+
+const mockScheduleHistory: ScheduleHistoryItem[] = [
+  {
+    id: 'hist-1',
+    title: 'Delivered — 20 orders',
+    status: 'Failed',
+    target: 'Delivered',
+    dateStr: 'August 2nd, 2026 at 2:54 AM (1 month ago)',
+    timeStr: '2:55 AM',
+    totalOrders: 20,
+    successCount: 0,
+    failCount: 20,
+    retryCount: 0,
+    errors: Array.from({ length: 8 }).map((_, i) => ({
+      orderTitle: 'Order —',
+      target: 'completed',
+      errorMessage: 'operator does not exist: seller_order_status = text',
+      time: '2:55 AM',
+    })),
+  },
+  {
+    id: 'hist-2',
+    title: 'On the way — 20 orders',
+    status: 'Failed',
+    target: 'On the way',
+    dateStr: 'August 2nd, 2026 at 2:52 AM (1 month ago)',
+    timeStr: '2:52 AM',
+    totalOrders: 20,
+    successCount: 0,
+    failCount: 20,
+    retryCount: 0,
+    errors: Array.from({ length: 8 }).map((_, i) => ({
+      orderTitle: 'Order —',
+      target: 'completed',
+      errorMessage: 'operator does not exist: seller_order_status = text',
+      time: '2:52 AM',
+    })),
+  },
+  {
+    id: 'hist-3',
+    title: 'Delivered — 1 order',
+    status: 'Failed',
+    target: 'Delivered',
+    dateStr: 'July 27th, 2026 at 7:10 PM (2 months ago)',
+    timeStr: '7:11 PM',
+    totalOrders: 1,
+    successCount: 0,
+    failCount: 1,
+    retryCount: 0,
+    errors: [
+      {
+        orderTitle: 'Order —',
+        target: 'completed',
+        errorMessage: 'operator does not exist: seller_order_status = text',
+        time: '7:11 PM',
+      },
+    ],
+  },
+  {
+    id: 'hist-4',
+    title: 'On the way — 1 order',
+    status: 'Cancelled',
+    target: 'On the way',
+    dateStr: 'July 27th, 2026 at 8:10 PM (2 months ago)',
+    timeStr: '8:10 PM',
+    totalOrders: 1,
+    successCount: 0,
+    failCount: 0,
+    retryCount: 0,
+    errors: [],
+  },
+  {
+    id: 'hist-5',
+    title: 'On the way — 1 order',
+    status: 'Failed',
+    target: 'On the way',
+    dateStr: 'July 27th, 2026 at 7:07 PM (2 months ago)',
+    timeStr: '7:07 PM',
+    totalOrders: 1,
+    successCount: 0,
+    failCount: 1,
+    retryCount: 0,
+    errors: [
+      {
+        orderTitle: 'Order —',
+        target: 'completed',
+        errorMessage: 'operator does not exist: seller_order_status = text',
+        time: '7:07 PM',
+      },
+    ],
+  },
+  {
+    id: 'hist-6',
+    title: 'On the way — 3 orders',
+    status: 'Cancelled',
+    target: 'On the way',
+    dateStr: 'July 27th, 2026 at 10:04 PM (2 months ago)',
+    timeStr: '10:04 PM',
+    totalOrders: 3,
+    successCount: 0,
+    failCount: 0,
+    retryCount: 0,
+    errors: [],
+  },
+]
+
 export function AdminOrdersView({
   orders,
   products,
@@ -55,19 +186,31 @@ export function AdminOrdersView({
   onToast,
   onSwitchToSeller,
 }: AdminOrdersViewProps) {
-  // Orders View & Selection state
-  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null)
+  // Orders View & Selection state - default to 'tester' matching Screenshot 1
+  const [selectedSellerId, setSelectedSellerId] = useState<string | null>('tester')
   const [sellerSearch, setSellerSearch] = useState('')
-  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'pending' | 'pickup' | 'on_the_way' | 'delivered' | 'cancelled'>('all')
+  const [orderSearch, setOrderSearch] = useState('')
   const [copiedSeller, setCopiedSeller] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
+  const [checkedOrderIds, setCheckedOrderIds] = useState<string[]>([])
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>('ord-ec60cb68')
 
-  // Secondary Modals
-  const [isSchedulesOpen, setIsSchedulesOpen] = useState(false)
+  // Schedules View state (Screenshots 3, 4, 5)
+  const [isSchedulesViewActive, setIsSchedulesViewActive] = useState(false)
+  const [schedulesSubTab, setSchedulesSubTab] = useState<'upcoming' | 'history'>('upcoming')
+  const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>('hist-1')
+
+  // Modals & Inspection (Screenshot 2)
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null)
+  const [isEditingOrder, setIsEditingOrder] = useState(false)
+  const [editCustomerName, setEditCustomerName] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [editAddress, setEditAddress] = useState('')
+  const [isReplacingItem, setIsReplacingItem] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
   // -------------------------------------------------------------
-  // GIVE ORDER FLOW STATE (Matching Screenshots 1, 2, 3)
+  // GIVE ORDER FLOW STATE
   // -------------------------------------------------------------
   const [isGiveOrderActive, setIsGiveOrderActive] = useState(false)
   const [giveStep, setGiveStep] = useState<1 | 2 | 3 | 4>(2)
@@ -78,49 +221,29 @@ export function AdminOrdersView({
   const [productSearch, setProductSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
 
-  // Step 4: Customer Details
-  const [fullName, setFullName] = useState('Alexander Wright')
-  const [phone, setPhone] = useState('+1 (555) 749-1823')
-  const [address1, setAddress1] = useState('750 Park Avenue, Apt 14B')
-  const [address2, setAddress2] = useState('Apt 14B')
-  const [city, setCity] = useState('New York')
-  const [stateName, setStateName] = useState('NY')
-  const [postalCode, setPostalCode] = useState('10021')
+  // Step 4: Customer Details - default to Screenshot 1 & 2 values
+  const [fullName, setFullName] = useState('Usellerstore')
+  const [phone, setPhone] = useState('28288282')
+  const [address1, setAddress1] = useState('KCXASCJAI, FWEUFH')
+  const [address2, setAddress2] = useState('EFUWEF')
+  const [city, setCity] = useState('DIQWDJ')
+  const [stateName, setStateName] = useState('WDJI')
+  const [postalCode, setPostalCode] = useState('10001')
   const [country, setCountry] = useState('United States')
   const [creationTiming, setCreationTiming] = useState<'instant' | 'scheduled'>('instant')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  interface ScheduleItem {
-    id: string
-    title: string
-    frequency: string
-    targetSeller: string
-    status: 'active' | 'paused'
-    lastRun: string
-  }
-
-  // Schedules state
-  const [schedules, setSchedules] = useState<ScheduleItem[]>([
-    {
-      id: 'sch-1',
-      title: 'Daily Organic Shopper Simulation',
-      frequency: 'Every 6 hours',
-      targetSeller: 'tester',
-      status: 'active',
-      lastRun: 'Today, 02:15 AM',
-    },
-    {
-      id: 'sch-2',
-      title: 'High-Value Electronics Fulfillment Check',
-      frequency: 'Every 24 hours',
-      targetSeller: 'tester',
-      status: 'active',
-      lastRun: 'Yesterday, 11:30 PM',
-    },
-  ])
-
-  // Random USA Customer Preset Pool
+  // Random USA Customer Presets
   const randomUSAPresets = [
+    {
+      name: 'Usellerstore',
+      phone: '28288282',
+      address1: 'KCXASCJAI, FWEUFH',
+      address2: 'EFUWEF',
+      city: 'DIQWDJ',
+      state: 'WDJI',
+      zip: '10001',
+    },
     {
       name: 'Alexander Wright',
       phone: '+1 (555) 749-1823',
@@ -139,125 +262,77 @@ export function AdminOrdersView({
       state: 'OR',
       zip: '97477',
     },
-    {
-      name: 'Emily Davis',
-      phone: '+1 (555) 921-4820',
-      address1: '452 Broadway Ave',
-      address2: 'Suite 4B',
-      city: 'San Francisco',
-      state: 'CA',
-      zip: '94107',
-    },
-    {
-      name: 'Michael Roberts',
-      phone: '+1 (555) 431-8976',
-      address1: '1428 Elm Street',
-      address2: 'Unit 204',
-      city: 'Dallas',
-      state: 'TX',
-      zip: '75201',
-    },
-    {
-      name: 'David Miller',
-      phone: '+1 (555) 672-3341',
-      address1: '320 Ocean Drive',
-      address2: '',
-      city: 'Miami',
-      state: 'FL',
-      zip: '33139',
-    },
-    {
-      name: 'Jessica Vance',
-      phone: '+1 (555) 219-5483',
-      address1: '100 Silicon Valley Way',
-      address2: 'Bldg 3',
-      city: 'Palo Alto',
-      state: 'CA',
-      zip: '94301',
-    },
   ]
 
   const handleApplyRandomUSA = () => {
-    const random = randomUSAPresets[Math.floor(Math.random() * randomUSAPresets.length)]
-    setFullName(random.name)
-    setPhone(random.phone)
-    setAddress1(random.address1)
-    setAddress2(random.address2)
-    setCity(random.city)
-    setStateName(random.state)
-    setPostalCode(random.zip)
+    const randomPick = randomUSAPresets[Math.floor(Math.random() * randomUSAPresets.length)]
+    setFullName(randomPick.name)
+    setPhone(randomPick.phone)
+    setAddress1(randomPick.address1)
+    setAddress2(randomPick.address2)
+    setCity(randomPick.city)
+    setStateName(randomPick.state)
+    setPostalCode(randomPick.zip)
     setCountry('United States')
-    onToast(`Applied Random USA Customer (${random.name})!`)
+    onToast(`Applied customer: ${randomPick.name}`)
   }
 
-  // Sellers List matching live profile
+  // Active merchants list
   const sellersList = useMemo(() => {
-    return [
-      {
-        id: 'tester',
-        shopName: sellerProfile.shopName || 'tester',
-        ownerName: sellerProfile.ownerName || 'Zain',
-        email: sellerProfile.email || 'zain55@gmail.com',
-        avatarLetter: (sellerProfile.shopName?.[0] || 'T').toUpperCase(),
-        totalOrders: orders.length,
-        pendingOrders: orders.filter((o) => ['unpaid', 'paid', 'pickup', 'on_the_way'].includes(o.status)).length,
-        deliveredOrders: orders.filter((o) => o.status === 'delivered').length,
-        balance: sellerProfile.balance,
-      },
-    ]
-  }, [sellerProfile, orders])
+    const testerSeller = {
+      id: 'tester',
+      shopName: 'tester',
+      ownerName: 'Zain',
+      avatarLetter: 'T',
+      totalOrders: orders.length,
+      pendingOrders: orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled').length,
+      deliveredOrders: orders.filter((o) => o.status === 'delivered').length,
+      balance: sellerProfile.balance || 430.5,
+    }
+
+    return [testerSeller]
+  }, [orders, sellerProfile])
 
   const filteredSellers = useMemo(() => {
-    const q = sellerSearch.toLowerCase().trim()
-    if (!q) return sellersList
+    if (!sellerSearch.trim()) return sellersList
+    const q = sellerSearch.toLowerCase()
     return sellersList.filter(
-      (s) =>
-        s.shopName.toLowerCase().includes(q) ||
-        s.ownerName.toLowerCase().includes(q) ||
-        s.email.toLowerCase().includes(q)
+      (s) => s.shopName.toLowerCase().includes(q) || s.ownerName.toLowerCase().includes(q)
     )
   }, [sellersList, sellerSearch])
 
   const selectedSeller = useMemo(() => {
-    if (!selectedSellerId) return null
-    return sellersList.find((s) => s.id === selectedSellerId) || null
-  }, [selectedSellerId, sellersList])
+    return sellersList.find((s) => s.id === selectedSellerId) || sellersList[0]
+  }, [sellersList, selectedSellerId])
 
+  // Filtered orders for selected seller
   const sellerOrders = useMemo(() => {
-    if (!selectedSeller) return []
-    if (orderStatusFilter === 'all') return orders
-    if (orderStatusFilter === 'pending') {
-      return orders.filter((o) => o.status === 'unpaid' || o.status === 'paid')
+    let result = orders
+    if (orderSearch.trim()) {
+      const q = orderSearch.toLowerCase()
+      result = result.filter(
+        (o) =>
+          o.orderNumber.toLowerCase().includes(q) ||
+          o.customerName.toLowerCase().includes(q) ||
+          o.items.some((i) => i.productTitle.toLowerCase().includes(q))
+      )
     }
-    return orders.filter((o) => o.status === orderStatusFilter)
-  }, [selectedSeller, orders, orderStatusFilter])
+    return result
+  }, [orders, orderSearch])
 
-  const statusCounts = useMemo(() => {
-    return {
-      all: orders.length,
-      pending: orders.filter((o) => o.status === 'unpaid' || o.status === 'paid').length,
-      pickup: orders.filter((o) => o.status === 'pickup').length,
-      on_the_way: orders.filter((o) => o.status === 'on_the_way').length,
-      delivered: orders.filter((o) => o.status === 'delivered').length,
-      cancelled: orders.filter((o) => o.status === 'cancelled').length,
-    }
-  }, [orders])
-
-  // Filtered Products for Step 2
+  // Products filtering for Step 2
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
+      const matchCat = selectedCategory === 'All' || p.category === selectedCategory
       const matchSearch =
         !productSearch.trim() ||
         p.title.toLowerCase().includes(productSearch.toLowerCase()) ||
-        p.category.toLowerCase().includes(productSearch.toLowerCase())
-      const matchCategory =
-        selectedCategory === 'All' ||
-        p.category.toLowerCase() === selectedCategory.toLowerCase()
-      return matchSearch && matchCategory
+        p.sku.toLowerCase().includes(productSearch.toLowerCase())
+      return matchCat && matchSearch
     })
-  }, [products, productSearch, selectedCategory])
+  }, [products, selectedCategory, productSearch])
 
-  // Step 2 Selection Toggle
+  // Selection handlers
   const handleToggleProduct = (product: Product) => {
     setSelectedItems((prev) => {
       const exists = prev.find((item) => item.product.id === product.id)
@@ -269,18 +344,17 @@ export function AdminOrdersView({
     })
   }
 
-  // Step 3 Quantity Adjustments
   const handleQuantityChange = (productId: string, delta: number) => {
     setSelectedItems((prev) =>
       prev
         .map((item) => {
           if (item.product.id === productId) {
-            const newQty = item.quantity + delta
-            return newQty > 0 ? { ...item, quantity: newQty } : null
+            const newQty = Math.max(1, item.quantity + delta)
+            return { ...item, quantity: newQty }
           }
           return item
         })
-        .filter(Boolean) as SelectedItem[]
+        .filter((item) => item.quantity > 0)
     )
   }
 
@@ -288,7 +362,7 @@ export function AdminOrdersView({
     setSelectedItems((prev) => prev.filter((item) => item.product.id !== productId))
   }
 
-  // Calculated Order Totals for Step 3 & 4
+  // Calculated totals for wizard
   const calculatedTotals = useMemo(() => {
     let revenue = 0
     let profit = 0
@@ -296,55 +370,59 @@ export function AdminOrdersView({
       revenue += Number(item.product.sell) * item.quantity
       profit += Number(item.product.profit) * item.quantity
     })
-    return {
-      revenue: Number(revenue.toFixed(2)),
-      profit: Number(profit.toFixed(2)),
-    }
+    return { revenue, profit }
   }, [selectedItems])
 
-  // Final Order Creation from Step 4
+  // Order submission
   const handleFinalCreateOrder = async () => {
     if (selectedItems.length === 0) {
       onToast('Please select at least one product')
       setGiveStep(2)
       return
     }
-    if (!fullName.trim()) {
-      onToast('Please enter customer full name')
-      return
-    }
 
     setIsSubmitting(true)
     try {
-      const orderNumber = '#ORD-' + Math.floor(10000 + Math.random() * 90000)
-      const fullShipping = `${address1}${address2 ? ', ' + address2 : ''}, ${city}, ${stateName} ${postalCode}, ${country}`
+      const randomHex = Math.random().toString(16).substring(2, 10)
+      const orderNumber = `#${randomHex}`
+
+      const formattedItems = selectedItems.map((item) => ({
+        productTitle: item.product.title,
+        quantity: item.quantity,
+        price: item.product.sell,
+        image: item.product.image,
+      }))
+
+      const now = new Date()
+      const day = now.getDate()
+      const month = now.toLocaleDateString('en-US', { month: 'short' })
+      const hours = now.getHours().toString().padStart(2, '0')
+      const mins = now.getMinutes().toString().padStart(2, '0')
+      const dateString = `${day} ${month}, ${hours}:${mins}`
+
+      const fullShipping = `${address1}${address2 ? `, ${address2}` : ''}, ${city}, ${stateName}, ${postalCode}, ${country}`
 
       const newOrder: Order = {
-        id: 'ord-' + Date.now(),
+        id: `ord-${randomHex}`,
         orderNumber,
-        customerName: fullName.trim(),
-        customerEmail: `${fullName.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+        customerName: fullName || 'Usellerstore',
+        customerEmail: phone || '28288282',
         shippingAddress: fullShipping,
-        date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
-        status: creationTiming === 'instant' ? 'paid' : 'unpaid',
-        totalAmount: calculatedTotals.revenue,
+        date: dateString,
+        status: 'paid', // Displays as Pending
+        totalAmount: selectedItems[0]?.product.cost || 14.64,
         profit: calculatedTotals.profit,
-        items: selectedItems.map((item) => ({
-          productTitle: item.product.title,
-          quantity: item.quantity,
-          price: Number(item.product.sell),
-          image: item.product.image,
-        })),
+        items: formattedItems,
       }
 
       await onCreateOrder(newOrder)
-      setIsGiveOrderActive(false)
       setSelectedSellerId('tester')
-      onToast(`Order ${orderNumber} created for ${sellerProfile.shopName}! (+$${calculatedTotals.profit.toFixed(2)} profit)`)
-      // Reset selection
+      setExpandedOrderId(newOrder.id)
+      setIsGiveOrderActive(false)
       setSelectedItems([])
-    } catch {
-      onToast('Error creating order')
+      onToast(`Order ${orderNumber} created for seller!`)
+    } catch (err: any) {
+      onToast(`Failed to create order: ${err.message || 'Unknown error'}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -359,9 +437,15 @@ export function AdminOrdersView({
     setTimeout(() => setCopiedSeller(false), 2000)
   }
 
+  const toggleCheckOrder = (id: string) => {
+    setCheckedOrderIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    )
+  }
+
   return (
     <div className="admin-orders-container space-y-6">
-      {/* 1. Header Bar matching screenshot */}
+      {/* 1. Header Bar matching Screenshots 1 & 3 */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         {/* Left: Orders Title with Blue Accent Bar */}
         <div className="flex items-center gap-3">
@@ -377,30 +461,51 @@ export function AdminOrdersView({
           </div>
         </div>
 
-        {/* Right Tools: Schedules & Give Order Trigger */}
-        <div className="flex items-center gap-2.5">
+        {/* Right Tools: Search, Schedules & Give Order */}
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+          {/* Header Search input matching Screenshot 1 & 3 */}
+          <div className="relative flex items-center min-w-[220px]">
+            <Search size={15} className="absolute left-3.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder={isSchedulesViewActive ? 'Search sellers...' : 'Search orders...'}
+              value={isSchedulesViewActive ? sellerSearch : orderSearch}
+              onChange={(e) => {
+                if (isSchedulesViewActive) setSellerSearch(e.target.value)
+                else setOrderSearch(e.target.value)
+              }}
+              className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-indigo-500 text-xs text-slate-800 focus:outline-hidden transition-all"
+            />
+          </div>
+
+          {/* Schedules Toggle Button */}
           <button
             type="button"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
-            onClick={() => setIsSchedulesOpen(true)}
+            className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0 ${
+              isSchedulesViewActive
+                ? 'bg-[#0F172A] text-white hover:bg-slate-800'
+                : 'border border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+            }`}
+            onClick={() => {
+              setIsSchedulesViewActive(!isSchedulesViewActive)
+              if (isGiveOrderActive) setIsGiveOrderActive(false)
+            }}
           >
-            <CalendarClock size={15} className="text-slate-600" />
-            <span>Schedules</span>
+            <CalendarClock size={15} className={isSchedulesViewActive ? 'text-white' : 'text-slate-600'} />
+            <span>{isSchedulesViewActive ? 'Viewing Schedules' : 'Schedules'}</span>
           </button>
 
+          {/* Give Order Button */}
           <button
             type="button"
-            className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0 ${
-              isGiveOrderActive
-                ? 'bg-[#5443ED] hover:bg-[#4332D6]'
-                : 'bg-[#5443ED] hover:bg-[#4332D6]'
-            }`}
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0 bg-[#5443ED] hover:bg-[#4332D6]"
             onClick={() => {
               if (isGiveOrderActive) {
                 setIsGiveOrderActive(false)
               } else {
                 setIsGiveOrderActive(true)
-                setGiveStep(2) // Default to step 2 products if seller is tester
+                setIsSchedulesViewActive(false)
+                setGiveStep(2)
                 if (selectedItems.length === 0 && products[0]) {
                   setSelectedItems([{ product: products[0], quantity: 1 }])
                 }
@@ -413,13 +518,13 @@ export function AdminOrdersView({
         </div>
       </div>
 
-      {/* 2. CONDITIONAL VIEW: Give Order Multi-Step Flow OR Normal Orders Screen */}
+      {/* 2. CONDITIONAL VIEW: Give Order Wizard OR Schedules View OR Standard Orders Screen */}
       {isGiveOrderActive ? (
         /* ------------------------------------------------------------- */
-        /* MULTI-STEP GIVE ORDER WIZARD MATCHING SCREENSHOTS 1, 2, 3    */
+        /* MULTI-STEP GIVE ORDER WIZARD                                  */
         /* ------------------------------------------------------------- */
         <div className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-7 shadow-xs space-y-6">
-          {/* Wizard Header Bar: Back Button & Stepper Pills */}
+          {/* Wizard Header Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
             <button
               type="button"
@@ -435,7 +540,7 @@ export function AdminOrdersView({
               <span>Back</span>
             </button>
 
-            {/* Stepper Wizard in Center matching screenshots */}
+            {/* Stepper Wizard in Center */}
             <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto pb-1 sm:pb-0">
               {/* Step 1: Seller */}
               <button
@@ -546,13 +651,30 @@ export function AdminOrdersView({
                   </div>
                 ))}
               </div>
+
+              {/* Bottom Action Bar */}
+              <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 -mx-5 sm:-mx-7 -mb-5 sm:-mb-7 rounded-b-3xl z-20 flex items-center justify-between shadow-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 font-medium">Selected Merchant:</span>
+                  <span className="text-xs text-slate-900 font-bold">
+                    {sellersList.find((s) => s.id === targetSellerId)?.shopName || 'tester (Zain)'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="px-6 py-2.5 rounded-xl bg-[#7C69EF] hover:bg-[#6854E4] text-white text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                  onClick={() => setGiveStep(2)}
+                >
+                  <span>Next: Select products</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
             </div>
           )}
 
-          {/* STEP 2: SELECT PRODUCTS (MATCHING SCREENSHOT 2) */}
+          {/* STEP 2: SELECT PRODUCTS */}
           {giveStep === 2 && (
             <div className="space-y-5">
-              {/* Search & Category Filter Bar */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <div className="relative flex-1 max-w-md">
                   <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -567,14 +689,13 @@ export function AdminOrdersView({
                     <button
                       type="button"
                       onClick={() => setProductSearch('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
                     >
                       <X size={13} />
                     </button>
                   )}
                 </div>
 
-                {/* Category Dropdown */}
                 <div className="relative min-w-[200px]">
                   <select
                     value={selectedCategory}
@@ -591,61 +712,62 @@ export function AdminOrdersView({
                 </div>
               </div>
 
-              {/* Tap product to select header */}
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 TAP A PRODUCT TO SELECT ({selectedItems.length} SELECTED) · SHOWING {filteredProducts.length} OF {products.length}
               </div>
 
-              {/* Product Cards Grid matching Screenshot 2 */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 max-h-[58vh] overflow-y-auto pr-1">
                 {filteredProducts.map((p) => {
-                  const isSelected = selectedItems.some((item) => item.product.id === p.id)
+                  const isSelected = selectedItems.some((i) => i.product.id === p.id)
+                  const selectedQty = selectedItems.find((i) => i.product.id === p.id)?.quantity || 0
+
                   return (
                     <div
                       key={p.id}
                       onClick={() => handleToggleProduct(p)}
-                      className={`relative rounded-2xl border transition-all cursor-pointer overflow-hidden flex flex-col justify-between bg-white shadow-xs hover:shadow-sm ${
+                      className={`relative bg-white rounded-2xl border transition-all cursor-pointer p-3 flex flex-col justify-between group overflow-hidden ${
                         isSelected
-                          ? 'border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/10'
-                          : 'border-slate-200/80 hover:border-slate-300'
+                          ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-md'
+                          : 'border-slate-200 hover:border-slate-300 shadow-xs'
                       }`}
                     >
-                      {/* Selection Checkmark Badge */}
                       {isSelected && (
-                        <div className="absolute top-2 right-2 z-10 w-5 h-5 rounded-full bg-[#5443ED] text-white flex items-center justify-center shadow-xs">
+                        <div className="absolute top-2.5 right-2.5 z-10 w-5 h-5 rounded-full bg-[#5443ED] text-white flex items-center justify-center shadow-xs">
                           <Check size={12} strokeWidth={3} />
                         </div>
                       )}
 
-                      {/* Product Image */}
-                      <div className="h-36 sm:h-40 w-full bg-slate-100 overflow-hidden relative">
-                        {p.image ? (
-                          <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full grid place-items-center text-slate-300">
-                            <Package size={28} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Info */}
-                      <div className="p-2.5 flex flex-col flex-1 justify-between">
-                        <div>
-                          <h4 className="font-bold text-xs text-slate-900 line-clamp-2 leading-tight" title={p.title}>
-                            {p.title}
-                          </h4>
-                          <div className="text-[11px] text-blue-600 font-medium mt-1 truncate">
-                            {p.category}
-                          </div>
+                      <div>
+                        <div className="aspect-square rounded-xl bg-slate-100 overflow-hidden mb-2 relative">
+                          {p.image ? (
+                            <img
+                              src={p.image}
+                              alt={p.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full grid place-items-center text-slate-300">
+                              <Package size={28} />
+                            </div>
+                          )}
+                          {isSelected && (
+                            <div className="absolute bottom-1.5 left-1.5 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                              Qty: {selectedQty}
+                            </div>
+                          )}
                         </div>
 
-                        <div className="mt-2 pt-1.5 border-t border-slate-100 text-xs">
-                          <div className="font-bold text-slate-900">
-                            Unit: ${Number(p.sell).toFixed(2)}
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            Cost: ${Number(p.cost).toFixed(2)}
-                          </div>
+                        <h4 className="font-bold text-xs text-slate-800 line-clamp-2 leading-tight" title={p.title}>
+                          {p.title}
+                        </h4>
+                      </div>
+
+                      <div className="mt-2 pt-1.5 border-t border-slate-100 text-xs">
+                        <div className="font-bold text-slate-900">
+                          Unit: ${Number(p.sell).toFixed(2)}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          Cost: ${Number(p.cost).toFixed(2)}
                         </div>
                       </div>
                     </div>
@@ -653,24 +775,32 @@ export function AdminOrdersView({
                 })}
               </div>
 
-              {/* Bottom Action Bar */}
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs text-slate-500 font-medium">
-                  {selectedItems.length} product(s) selected
-                </span>
+              {/* Bottom Action Bar: Sticky Frosted Bar */}
+              <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 -mx-5 sm:-mx-7 -mb-5 sm:-mb-7 rounded-b-3xl z-20 flex items-center justify-between shadow-lg">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-700 font-bold">
+                    {selectedItems.length} product{selectedItems.length === 1 ? '' : 's'} selected
+                  </span>
+                  {selectedItems.length > 0 && (
+                    <span className="hidden sm:inline-block text-xs text-slate-500 font-medium">
+                      · Subtotal: <b className="text-slate-900">${calculatedTotals.revenue.toFixed(2)}</b> (Est. Profit: <b className="text-[#7C69EF]">+${calculatedTotals.profit.toFixed(2)}</b>)
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   disabled={selectedItems.length === 0}
-                  className="px-6 py-2.5 rounded-xl bg-[#7C69EF] hover:bg-[#6854E4] text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2.5 rounded-xl bg-[#7C69EF] hover:bg-[#6854E4] text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   onClick={() => setGiveStep(3)}
                 >
-                  Next: Review items
+                  <span>Next: Review items</span>
+                  <ArrowRight size={14} />
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 3: REVIEW ITEMS (MATCHING SCREENSHOT 3) */}
+          {/* STEP 3: REVIEW ITEMS */}
           {giveStep === 3 && (
             <div className="space-y-5">
               <div className="flex items-center justify-between pb-2">
@@ -727,7 +857,6 @@ export function AdminOrdersView({
                               Cost: ${Number(item.product.cost).toFixed(2)}
                             </div>
 
-                            {/* Quantity Stepper */}
                             <div className="flex items-center gap-1.5 mt-2">
                               <button
                                 type="button"
@@ -750,7 +879,6 @@ export function AdminOrdersView({
                           </div>
                         </div>
 
-                        {/* Profit and Remove */}
                         <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2">
                           <span className="text-sm font-bold text-[#7C69EF] tabular-nums">
                             +${itemProfit.toFixed(2)}
@@ -782,24 +910,32 @@ export function AdminOrdersView({
                 </div>
               </div>
 
-              {/* Bottom Action Bar */}
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end">
+              {/* Bottom Action Bar: Sticky Frosted Bar */}
+              <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 -mx-5 sm:-mx-7 -mb-5 sm:-mb-7 rounded-b-3xl z-20 flex items-center justify-between shadow-lg">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                  onClick={() => setGiveStep(2)}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back to Products</span>
+                </button>
                 <button
                   type="button"
                   disabled={selectedItems.length === 0}
-                  className="px-6 py-2.5 rounded-xl bg-[#5443ED] hover:bg-[#4332D6] text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl bg-[#7C69EF] hover:bg-[#6854E4] text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   onClick={() => setGiveStep(4)}
                 >
-                  Next: Customer
+                  <span>Next: Customer</span>
+                  <ArrowRight size={14} />
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 4: CUSTOMER DETAILS (MATCHING SCREENSHOT 1) */}
+          {/* STEP 4: CUSTOMER DETAILS */}
           {giveStep === 4 && (
             <div className="space-y-5">
-              {/* Header & Random USA Generator Button */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <p className="text-xs text-slate-500 m-0">
                   Enter customer info or use a random USA customer to test.
@@ -814,9 +950,8 @@ export function AdminOrdersView({
                 </button>
               </div>
 
-              {/* Form Fields matching Screenshot 1 */}
+              {/* Form Fields */}
               <div className="space-y-3.5">
-                {/* Full name & Phone */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Full name</label>
@@ -838,7 +973,6 @@ export function AdminOrdersView({
                   </div>
                 </div>
 
-                {/* Address line 1 */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Address line 1</label>
                   <input
@@ -849,7 +983,6 @@ export function AdminOrdersView({
                   />
                 </div>
 
-                {/* Address line 2 */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Address line 2 (optional)</label>
                   <input
@@ -860,7 +993,6 @@ export function AdminOrdersView({
                   />
                 </div>
 
-                {/* City & State */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">City</label>
@@ -882,7 +1014,6 @@ export function AdminOrdersView({
                   </div>
                 </div>
 
-                {/* Postal code & Country */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Postal code</label>
@@ -911,7 +1042,6 @@ export function AdminOrdersView({
                   WHEN TO CREATE THIS ORDER
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Instant Option */}
                   <div
                     onClick={() => setCreationTiming('instant')}
                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-3 ${
@@ -929,7 +1059,6 @@ export function AdminOrdersView({
                     </div>
                   </div>
 
-                  {/* Scheduled Option */}
                   <div
                     onClick={() => setCreationTiming('scheduled')}
                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-3 ${
@@ -949,13 +1078,21 @@ export function AdminOrdersView({
                 </div>
               </div>
 
-              {/* Bottom Action Bar */}
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end">
+              {/* Bottom Action Bar: Sticky Frosted Bar */}
+              <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 -mx-5 sm:-mx-7 -mb-5 sm:-mb-7 rounded-b-3xl z-20 flex items-center justify-between shadow-lg">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                  onClick={() => setGiveStep(3)}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back to Review</span>
+                </button>
                 <button
                   type="button"
                   disabled={isSubmitting}
                   onClick={handleFinalCreateOrder}
-                  className="px-6 py-2.5 rounded-xl bg-[#9080F8] hover:bg-[#7C69EF] text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-6 py-2.5 rounded-xl bg-[#7C69EF] hover:bg-[#6854E4] text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <Plus size={14} />
                   <span>{isSubmitting ? 'Creating order…' : 'Create order'}</span>
@@ -964,606 +1101,642 @@ export function AdminOrdersView({
             </div>
           )}
         </div>
+      ) : isSchedulesViewActive ? (
+        /* ------------------------------------------------------------- */
+        /* SCHEDULES MANAGEMENT VIEW (Matching Screenshots 3, 4, 5)      */
+        /* ------------------------------------------------------------- */
+        <div className="space-y-4">
+          {/* Subtabs: Upcoming vs History */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSchedulesSubTab('upcoming')}
+              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                schedulesSubTab === 'upcoming'
+                  ? 'bg-white border border-slate-200 shadow-xs text-slate-900 font-bold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Clock size={14} className="text-slate-500" />
+              <span>Upcoming</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSchedulesSubTab('history')}
+              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                schedulesSubTab === 'history'
+                  ? 'bg-white border border-slate-900 text-slate-900 shadow-xs font-bold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <CalendarClock size={14} className="text-slate-500" />
+              <span>History</span>
+            </button>
+          </div>
+
+          {/* Upcoming Tab (Screenshot 3) */}
+          {schedulesSubTab === 'upcoming' && (
+            <div className="rounded-2xl border border-dashed border-slate-200/90 p-16 text-center text-xs text-slate-500 bg-white/50 min-h-[300px] flex items-center justify-center shadow-xs">
+              No upcoming schedules. Pick orders and click Schedule status change.
+            </div>
+          )}
+
+          {/* History Tab (Screenshots 4 & 5) */}
+          {schedulesSubTab === 'history' && (
+            <div className="space-y-3">
+              {mockScheduleHistory.map((item) => {
+                const isExpanded = expandedScheduleId === item.id
+                return (
+                  <div
+                    key={item.id}
+                    className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs transition-all"
+                  >
+                    {/* Header line of schedule run */}
+                    <div
+                      onClick={() => setExpandedScheduleId(isExpanded ? null : item.id)}
+                      className="p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/50 select-none transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-slate-400">
+                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-sm text-slate-900 leading-tight">
+                              {item.title}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                item.status === 'Failed'
+                                  ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {item.status}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                              → {item.target}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Clock size={11} /> {item.dateStr}
+                            </span>
+                            <span>•</span>
+                            <span>{item.totalOrders} orders</span>
+                            <span>•</span>
+                            <span>✓ {item.successCount} · ✕ {item.failCount} · ⤶ {item.retryCount}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expandable Execution Logs (Screenshot 5) */}
+                    {isExpanded && item.errors.length > 0 && (
+                      <div className="border-t border-slate-100 divide-y divide-slate-100 bg-white">
+                        {item.errors.map((err, errIdx) => (
+                          <div
+                            key={errIdx}
+                            className="p-3.5 pl-9 flex items-start justify-between gap-3 text-xs"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <XCircle size={15} className="text-rose-500 shrink-0 mt-0.5" />
+                              <div className="min-w-0">
+                                <div className="text-slate-700 font-medium flex items-center gap-2">
+                                  <span>{err.orderTitle}</span>
+                                  <span className="text-slate-400 font-normal">Target: {err.target}</span>
+                                </div>
+                                <div className="text-rose-500 font-mono text-[11px] mt-0.5">
+                                  {err.errorMessage}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-slate-400 text-[11px] shrink-0">{err.time}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       ) : (
         /* ------------------------------------------------------------- */
-        /* STANDARD 2-COLUMN ORDERS MANAGEMENT INTERFACE                 */
+        /* STANDARD 2-COLUMN ORDERS MANAGEMENT INTERFACE (Screenshot 1)  */
         /* ------------------------------------------------------------- */
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* Left Column: Sellers List (4 cols) */}
-          <div className="lg:col-span-5 xl:col-span-4 space-y-3">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-1">
-              Active Merchants ({filteredSellers.length})
+          <div className="lg:col-span-5 xl:col-span-4 space-y-2.5">
+            {/* Top Store Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
+              <Store size={13} className="text-slate-500" />
+              <span>tester</span>
             </div>
 
-            {filteredSellers.length === 0 ? (
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center text-slate-400 shadow-xs">
-                <Search size={28} className="mx-auto mb-2 opacity-50" />
-                <p className="font-semibold text-xs">No sellers found</p>
-                <p className="text-[11px] mt-1 text-slate-400">Clear your search to see all sellers.</p>
-              </div>
-            ) : (
-              filteredSellers.map((seller) => {
-                const isSelected = selectedSellerId === seller.id
-                return (
-                  <div
-                    key={seller.id}
-                    onClick={() => setSelectedSellerId(seller.id)}
-                    className={`relative p-4 rounded-2xl border transition-all cursor-pointer shadow-xs ${
-                      isSelected
-                        ? 'bg-white border-indigo-500 ring-2 ring-indigo-500/15 shadow-sm'
-                        : 'bg-white border-slate-200/80 hover:border-slate-300 hover:bg-slate-50/40'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      {/* Seller Identity */}
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="relative shrink-0">
-                          <div className="w-11 h-11 rounded-full bg-[#00bf87] text-white flex items-center justify-center font-bold text-base shadow-xs">
-                            {seller.avatarLetter}
-                          </div>
-                          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white" />
+            {/* Seller Cards */}
+            {filteredSellers.map((seller) => {
+              const isSelected = selectedSellerId === seller.id
+              return (
+                <div
+                  key={seller.id}
+                  onClick={() => setSelectedSellerId(seller.id)}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-xs ${
+                    isSelected
+                      ? 'bg-white border-indigo-400 ring-2 ring-indigo-500/15 shadow-sm'
+                      : 'bg-white border-slate-200/80 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Identity */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-[#00bf87] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                          {seller.avatarLetter}
                         </div>
-
-                        <div className="min-w-0">
-                          <div className="font-bold text-sm text-slate-900 leading-tight truncate">
-                            {seller.shopName}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
-                            <span className="truncate">{seller.ownerName}</span>
-                            <button
-                              type="button"
-                              onClick={(e) => handleCopySeller(e, seller.id)}
-                              className="text-slate-400 hover:text-slate-700 transition-colors p-0.5"
-                              title="Copy seller ID"
-                            >
-                              <Copy size={11} />
-                            </button>
-                          </div>
-                        </div>
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-white" />
                       </div>
 
-                      {/* 3 Pills: TOTAL, PENDING, DELIVERED */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span
-                          className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                          title="Total Orders"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                          <span>TOTAL</span>
-                          <span className="font-extrabold">{seller.totalOrders}</span>
-                        </span>
-
-                        <span
-                          className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/60 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                          title="Pending Orders"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          <span>PENDING</span>
-                          <span className="font-extrabold">{seller.pendingOrders}</span>
-                        </span>
-
-                        <span
-                          className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                          title="Delivered Orders"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span>DELIVERED</span>
-                          <span className="font-extrabold">{seller.deliveredOrders}</span>
-                        </span>
+                      <div className="min-w-0">
+                        <div className="font-bold text-sm text-slate-900 leading-tight">
+                          {seller.shopName}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
+                          <span>{seller.ownerName}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopySeller(e, seller.id)}
+                            className="text-slate-400 hover:text-slate-700 transition-colors p-0.5 cursor-pointer"
+                            title="Copy seller ID"
+                          >
+                            <Copy size={11} />
+                          </button>
+                        </div>
                       </div>
                     </div>
+
+                    {/* 3 Pills matching Screenshot 1 */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                        <span>TOTAL</span>
+                        <span className="font-extrabold ml-0.5">{seller.totalOrders}</span>
+                      </span>
+
+                      <span className="inline-flex items-center gap-1 bg-[#FEF3C7] text-[#D97706] px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        <span>PENDING</span>
+                        <span className="font-extrabold ml-0.5">{seller.pendingOrders}</span>
+                      </span>
+
+                      <span className="inline-flex items-center gap-1 bg-[#D1FAE5] text-[#047857] px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span>DELIVERED</span>
+                        <span className="font-extrabold ml-0.5">{seller.deliveredOrders}</span>
+                      </span>
+                    </div>
                   </div>
-                )
-              })
-            )}
+                </div>
+              )
+            })}
           </div>
 
-          {/* Right Column: Orders View (8 cols) */}
-          <div className="lg:col-span-7 xl:col-span-8">
-            {!selectedSeller ? (
-              /* Empty State: Matching screenshot "No seller selected" */
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center flex flex-col items-center justify-center min-h-[420px] shadow-xs">
-                <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-4">
-                  <ShoppingBag size={28} />
-                </div>
-                <h2 className="text-lg font-bold text-slate-900 m-0">No seller selected</h2>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto mt-2 leading-relaxed">
-                  Pick a seller from the list to see their active orders and update pickup, delivering, and completion status from here.
+          {/* Right Column: Orders for Selected Seller (8 cols) */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-3">
+            {/* Top Toolbar matching Screenshot 1 */}
+            <div className="flex items-center justify-between">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
+                <Store size={13} className="text-slate-500" />
+                <span>{selectedSeller?.shopName || 'tester'}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHidden(!showHidden)
+                  onToast(showHidden ? 'Showing all orders' : 'Showing hidden orders view')
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+              >
+                <Trash2 size={13} className="text-slate-500" />
+                <span>Show hidden</span>
+              </button>
+            </div>
+
+            {/* Orders List matching Screenshot 1 */}
+            {sellerOrders.length === 0 ? (
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center shadow-xs space-y-3">
+                <Package size={36} className="mx-auto text-slate-300" />
+                <h3 className="font-bold text-sm text-slate-800">No orders yet</h3>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  Click &quot;+ Give Order&quot; above to dispatch an order to {selectedSeller?.shopName || 'tester'}.
                 </p>
                 <button
                   type="button"
-                  className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                  onClick={() => setSelectedSellerId('tester')}
+                  className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#5443ED] text-white text-xs font-bold shadow-xs hover:bg-[#4332D6] transition-colors cursor-pointer"
+                  onClick={() => {
+                    setIsGiveOrderActive(true)
+                    setGiveStep(2)
+                  }}
                 >
-                  <span>Select &quot;{sellerProfile.shopName}&quot;</span>
-                  <ChevronRight size={14} />
+                  <Plus size={14} />
+                  <span>Give Order to {selectedSeller?.shopName || 'tester'}</span>
                 </button>
               </div>
             ) : (
-              /* Selected Seller Workspace */
-              <div className="space-y-4">
-                {/* Selected Seller Header Bar */}
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-[#00bf87] text-white flex items-center justify-center font-bold text-lg shadow-xs">
-                      {selectedSeller.avatarLetter}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-base font-bold text-slate-900 leading-tight m-0">
-                          {selectedSeller.shopName}
-                        </h2>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                          VERIFIED SELLER
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5 m-0">
-                        Owner: <b className="text-slate-700">{selectedSeller.ownerName}</b> · Balance: <b className="text-emerald-600">${selectedSeller.balance.toFixed(2)}</b>
-                      </p>
-                    </div>
-                  </div>
+              <div className="space-y-3">
+                {sellerOrders.map((order, idx) => {
+                  const isExpanded = expandedOrderId === order.id
+                  const isChecked = checkedOrderIds.includes(order.id)
+                  const primaryItem = order.items[0]
 
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    {onSwitchToSeller && (
-                      <button
-                        type="button"
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-                        onClick={onSwitchToSeller}
-                        title="Preview this seller's console"
-                      >
-                        <Store size={14} /> <span>Storefront</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl bg-[#5443ED] hover:bg-[#4332D6] text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                      onClick={() => {
-                        setIsGiveOrderActive(true)
-                        setGiveStep(2)
-                        if (selectedItems.length === 0 && products[0]) {
-                          setSelectedItems([{ product: products[0], quantity: 1 }])
-                        }
-                      }}
+                  return (
+                    <div
+                      key={order.id}
+                      className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs hover:border-slate-300 transition-all"
                     >
-                      <Plus size={14} /> <span>Give Order</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Status Filter Tabs */}
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-1.5 shadow-xs flex items-center gap-1 overflow-x-auto">
-                  {[
-                    { id: 'all', label: 'All Orders', count: statusCounts.all },
-                    { id: 'pending', label: 'Pending / Paid', count: statusCounts.pending },
-                    { id: 'pickup', label: 'Pickup Ready', count: statusCounts.pickup },
-                    { id: 'on_the_way', label: 'Delivering', count: statusCounts.on_the_way },
-                    { id: 'delivered', label: 'Completed', count: statusCounts.delivered },
-                    { id: 'cancelled', label: 'Cancelled', count: statusCounts.cancelled },
-                  ].map((tab) => {
-                    const isActive = orderStatusFilter === tab.id
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                          isActive
-                            ? 'bg-[#EEF2FF] text-indigo-700 font-bold shadow-2xs'
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                        }`}
-                        onClick={() => setOrderStatusFilter(tab.id as any)}
+                      {/* Accordion Header Row matching Screenshot 1 */}
+                      <div
+                        onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                        className="p-4 flex items-center justify-between gap-3 cursor-pointer select-none"
                       >
-                        <span>{tab.label}</span>
-                        <span
-                          className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
-                            isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          {tab.count}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
+                        {/* Left Info */}
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Circular Checkbox */}
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleCheckOrder(order.id)
+                            }}
+                            className={`w-4 h-4 rounded-full border flex items-center justify-center cursor-pointer transition-colors shrink-0 ${
+                              isChecked
+                                ? 'bg-indigo-600 border-indigo-600 text-white'
+                                : 'border-slate-300 hover:border-slate-400'
+                            }`}
+                          >
+                            {isChecked && <Check size={10} strokeWidth={3} />}
+                          </div>
 
-                {/* Orders List */}
-                {sellerOrders.length === 0 ? (
-                  <div className="bg-white border border-slate-200/80 rounded-3xl p-10 text-center shadow-xs">
-                    <Package size={36} className="mx-auto mb-2 text-slate-300" />
-                    <h3 className="font-bold text-sm text-slate-800">No orders in this status</h3>
-                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                      There are no orders matching this filter for {selectedSeller.shopName}. Use the button below to dispatch a new order.
-                    </p>
-                    <button
-                      type="button"
-                      className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#5443ED] text-white text-xs font-bold shadow-xs hover:bg-[#4332D6] transition-colors cursor-pointer"
-                      onClick={() => {
-                        setIsGiveOrderActive(true)
-                        setGiveStep(2)
-                      }}
-                    >
-                      <Plus size={14} />
-                      <span>Give Order to {selectedSeller.shopName}</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3.5">
-                    {sellerOrders.map((order) => {
-                      const isUnpaidOrPaid = order.status === 'unpaid' || order.status === 'paid'
-                      const isPickup = order.status === 'pickup'
-                      const isDelivering = order.status === 'on_the_way'
-                      const isDelivered = order.status === 'delivered'
-                      const isCancelled = order.status === 'cancelled'
+                          {/* Sequence Number Box */}
+                          <div className="w-9 h-9 rounded-xl bg-[#F1F5F9] text-slate-700 font-bold flex items-center justify-center text-sm shrink-0">
+                            {idx + 1}
+                          </div>
 
-                      return (
-                        <div
-                          key={order.id}
-                          className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs hover:border-slate-300 transition-all space-y-4"
-                        >
-                          {/* Order Top Bar */}
-                          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                            <div className="flex items-center gap-2.5">
-                              <span className="font-extrabold text-sm text-slate-900 tracking-tight">
-                                {order.orderNumber}
-                              </span>
-                              <span className="text-slate-300">·</span>
-                              <span className="text-xs text-slate-400 flex items-center gap-1">
-                                <Clock size={12} /> {order.date}
-                              </span>
-                            </div>
-
-                            {/* Status Badge */}
+                          {/* Customer Name & Subtitle */}
+                          <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide border ${
-                                  isDelivered
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : isDelivering
-                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                    : isPickup
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                    : isCancelled
-                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                    : 'bg-blue-50 text-blue-700 border-blue-200'
-                                }`}
-                              >
-                                {isDelivered && <PackageCheck size={12} />}
-                                {isDelivering && <Truck size={12} />}
-                                {isPickup && <Package size={12} />}
-                                {isCancelled && <AlertCircle size={12} />}
-                                {isUnpaidOrPaid && <Clock size={12} />}
-                                <span>{order.status.replace(/_/g, ' ')}</span>
+                              <span className="font-bold text-sm text-slate-900 hover:text-indigo-600 transition-colors">
+                                {order.customerName}
+                              </span>
+                              <span className="bg-slate-100 text-slate-500 text-[11px] font-medium px-2 py-0.5 rounded-md">
+                                {order.items.length} item{order.items.length === 1 ? '' : 's'}
                               </span>
                             </div>
-                          </div>
-
-                          {/* Customer & Item Details */}
-                          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                            {/* Item Thumbnail & Name */}
-                            <div className="md:col-span-7 flex items-start gap-3">
-                              <div className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-                                {order.items[0]?.image ? (
-                                  <img
-                                    src={order.items[0].image}
-                                    alt={order.items[0].productTitle}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <Package size={22} className="text-slate-400" />
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <h4 className="font-bold text-xs sm:text-sm text-slate-900 truncate leading-snug" title={order.items[0]?.productTitle}>
-                                  {order.items[0]?.productTitle || 'Store item'}
-                                </h4>
-                                <div className="text-xs text-slate-500 mt-0.5">
-                                  Qty: <b className="text-slate-800">{order.items[0]?.quantity || 1}</b> · Unit Price: <b className="text-slate-800">${Number(order.items[0]?.price || 0).toFixed(2)}</b>
-                                </div>
-                                <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">
-                                  Seller Net Profit: +${Number(order.profit).toFixed(2)}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Customer & Address */}
-                            <div className="md:col-span-5 bg-slate-50/80 rounded-xl p-3 text-xs border border-slate-100 flex flex-col justify-between">
-                              <div>
-                                <div className="font-semibold text-slate-800 truncate">
-                                  {order.customerName}
-                                </div>
-                                <div className="text-slate-400 text-[11px] truncate">
-                                  {order.customerEmail}
-                                </div>
-                                <div className="text-slate-500 text-[11px] mt-1 line-clamp-1" title={order.shippingAddress}>
-                                  📍 {order.shippingAddress}
-                                </div>
-                              </div>
-                              <div className="mt-2 pt-1.5 border-t border-slate-200/60 flex items-center justify-between font-bold text-slate-900">
-                                <span>Order Total:</span>
-                                <span className="text-sm font-black tabular-nums">${Number(order.totalAmount).toFixed(2)}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Order Actions Toolbar */}
-                          <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
-                            {/* Workflow Status Advances */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              {isUnpaidOrPaid && (
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer"
-                                  onClick={() => onUpdateOrderStatus(order.id, 'pickup')}
-                                >
-                                  <Package size={13} />
-                                  <span>Mark as Picked Up</span>
-                                </button>
-                              )}
-
-                              {isPickup && (
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer"
-                                  onClick={() => onUpdateOrderStatus(order.id, 'on_the_way')}
-                                >
-                                  <Truck size={13} />
-                                  <span>Dispatch for Delivery</span>
-                                </button>
-                              )}
-
-                              {isDelivering && (
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition-colors cursor-pointer"
-                                  onClick={() => onUpdateOrderStatus(order.id, 'delivered')}
-                                >
-                                  <PackageCheck size={13} />
-                                  <span>Mark as Delivered & Completed</span>
-                                </button>
-                              )}
-
-                              {isDelivered && (
-                                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                                  <Check size={13} /> Completed & Settled
-                                </span>
-                              )}
-
-                              {!isCancelled && !isDelivered && (
-                                <button
-                                  type="button"
-                                  className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-xs font-semibold transition-colors cursor-pointer"
-                                  onClick={() => onUpdateOrderStatus(order.id, 'cancelled')}
-                                  title="Cancel order and reverse attached profit"
-                                >
-                                  Cancel
-                                </button>
-                              )}
-                            </div>
-
-                            {/* Secondary Utilities */}
-                            <div className="flex items-center gap-1.5 ml-auto">
-                              <button
-                                type="button"
-                                className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-                                onClick={() => setInspectOrder(order)}
-                                title="Inspect Order Manifest / Receipt"
-                              >
-                                <Printer size={14} />
-                              </button>
-
-                              <button
-                                type="button"
-                                className="p-1.5 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
-                                onClick={() => setDeleteConfirmId(order.id)}
-                                title="Delete false test order from database"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                            <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              <span>{order.items.reduce((s, i) => s + (i.quantity || 1), 0)} unit</span>
+                              <span>•</span>
+                              <span>{order.date}</span>
+                              <span>•</span>
+                              <span className="flex items-center gap-0.5">
+                                <Clock size={11} /> 12m
+                              </span>
                             </div>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
+
+                        {/* Right Info */}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            <div className="font-bold text-sm text-slate-900 tabular-nums">
+                              ${Number(order.totalAmount).toFixed(2)}
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-medium tabular-nums mt-0.5">
+                              Profit: ${Number(order.profit).toFixed(2)}
+                            </div>
+                          </div>
+
+                          {/* Pending Badge */}
+                          <span className="bg-[#FEF3C7] text-[#D97706] font-semibold text-xs px-2.5 py-0.5 rounded-full capitalize">
+                            {order.status === 'paid' ? 'Pending' : order.status.replace(/_/g, ' ')}
+                          </span>
+
+                          {/* Chevron Toggle Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setExpandedOrderId(isExpanded ? null : order.id)
+                            }}
+                            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+                          >
+                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expanded Product Items matching Screenshot 1 */}
+                      {isExpanded && (
+                        <div className="border-t border-slate-100 divide-y divide-slate-100">
+                          {order.items.map((item, itemIdx) => (
+                            <div
+                              key={itemIdx}
+                              onClick={() => setInspectOrder(order)}
+                              className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/70 cursor-pointer transition-colors"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-12 h-12 rounded-xl border border-slate-200 overflow-hidden shrink-0 bg-slate-50">
+                                  <img
+                                    src={item.image || '/products/mibasies_makeup_bag.jpg'}
+                                    alt={item.productTitle}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="font-bold text-xs text-slate-900 truncate max-w-lg leading-snug" title={item.productTitle}>
+                                    {item.productTitle}
+                                  </h4>
+                                  <div className="text-xs text-slate-400 mt-0.5 font-medium">
+                                    Qty {item.quantity} × ${Number(item.price).toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="font-bold text-sm text-slate-900 tabular-nums">
+                                  ${(Number(item.price) * item.quantity).toFixed(2)}
+                                </span>
+                                <span className="bg-[#FEF3C7] text-[#D97706] font-semibold text-xs px-2.5 py-0.5 rounded-full capitalize">
+                                  {order.status === 'paid' ? 'Pending' : order.status.replace(/_/g, ' ')}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* 3. Schedules Modal */}
-      {isSchedulesOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                  <CalendarClock size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-slate-900 m-0">Automated Order Schedules</h3>
-                  <p className="text-xs text-slate-500 m-0 mt-0.5">Recurring pipelines that auto-dispatch simulated purchases</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-                onClick={() => setIsSchedulesOpen(false)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-3.5 max-h-[60vh] overflow-y-auto">
-              {schedules.map((sch) => (
-                <div
-                  key={sch.id}
-                  className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40 hover:bg-slate-50 space-y-3 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-bold text-xs sm:text-sm text-slate-900 leading-tight">
-                        {sch.title}
-                      </div>
-                      <div className="text-xs text-slate-400 mt-1 flex items-center gap-2">
-                        <span>Frequency: <b className="text-slate-600">{sch.frequency}</b></span>
-                        <span>·</span>
-                        <span>Last: <b className="text-slate-600">{sch.lastRun}</b></span>
-                      </div>
-                    </div>
-
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        sch.status === 'active'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-slate-200 text-slate-600'
-                      }`}
-                    >
-                      {sch.status}
-                    </span>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSchedules((prev) =>
-                          prev.map((s) => (s.id === sch.id ? { ...s, status: s.status === 'active' ? 'paused' : 'active' } : s))
-                        )
-                        onToast('Schedule state updated')
-                      }}
-                      className="text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
-                    >
-                      {sch.status === 'active' ? 'Pause Pipeline' : 'Resume Pipeline'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const randomProd = products[0]
-                        const newOrder: Order = {
-                          id: 'ord-' + Date.now(),
-                          orderNumber: '#ORD-' + Math.floor(10000 + Math.random() * 90000),
-                          customerName: 'Scheduled Customer (Auto)',
-                          customerEmail: 'auto.customer@pipeline.com',
-                          shippingAddress: '742 Evergreen Terrace, Springfield, OR',
-                          date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
-                          status: 'paid',
-                          totalAmount: randomProd?.sell || 59.95,
-                          profit: randomProd?.profit || 12.5,
-                          items: [
-                            {
-                              productTitle: randomProd?.title || 'Store Product',
-                              quantity: 1,
-                              price: randomProd?.sell || 59.95,
-                              image: randomProd?.image || '',
-                            },
-                          ],
-                        }
-                        onCreateOrder(newOrder)
-                        setSelectedSellerId('tester')
-                        onToast(`Triggered "${sch.title}": Order ${newOrder.orderNumber} created!`)
-                      }}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
-                    >
-                      <Zap size={12} />
-                      <span>Trigger Now</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Auto-scheduler active</span>
-              <button
-                type="button"
-                className="px-4 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer"
-                onClick={() => setIsSchedulesOpen(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Order Receipt Inspection Modal */}
+      {/* 3. Order Details / Inspection Modal (MATCHING SCREENSHOT 2) */}
       {inspectOrder && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Printer size={18} className="text-indigo-600" />
-                <h3 className="font-bold text-base text-slate-900 m-0">Order Receipt</h3>
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header matching Screenshot 2 */}
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-14 h-14 rounded-2xl border border-slate-200 overflow-hidden shrink-0 bg-slate-100">
+                  <img
+                    src={inspectOrder.items[0]?.image || '/products/mibasies_makeup_bag.jpg'}
+                    alt={inspectOrder.items[0]?.productTitle || 'Product'}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-sm text-slate-900 truncate max-w-sm leading-snug" title={inspectOrder.items[0]?.productTitle}>
+                    {inspectOrder.items[0]?.productTitle || 'Store Product'}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                    <span className="bg-slate-100 text-slate-600 font-mono text-[11px] px-2 py-0.5 rounded-md font-medium">
+                      {inspectOrder.orderNumber}
+                    </span>
+                    <span className="bg-[#FEF3C7] text-[#D97706] font-semibold text-[11px] px-2.5 py-0.5 rounded-full capitalize">
+                      {inspectOrder.status === 'paid' ? 'Pending' : inspectOrder.status.replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium">
+                      <Clock size={11} /> Placed {inspectOrder.date}
+                    </span>
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
-                onClick={() => setInspectOrder(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+                onClick={() => {
+                  setInspectOrder(null)
+                  setIsEditingOrder(false)
+                  setIsReplacingItem(false)
+                }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Order Number:</span>
-                <span className="font-bold text-slate-900">{inspectOrder.orderNumber}</span>
+            {/* 3 Action Buttons matching Screenshot 2 */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditingOrder(!isEditingOrder)
+                  setEditCustomerName(inspectOrder.customerName)
+                  setEditPhone(inspectOrder.customerEmail)
+                  setEditAddress(inspectOrder.shippingAddress)
+                }}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border text-xs font-semibold shadow-2xs transition-colors cursor-pointer ${
+                  isEditingOrder
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                }`}
+              >
+                <Pencil size={13} />
+                <span>Edit</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsReplacingItem(!isReplacingItem)}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border text-xs font-semibold shadow-2xs transition-colors cursor-pointer ${
+                  isReplacingItem
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                }`}
+              >
+                <ArrowLeftRight size={13} />
+                <span>Replace</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteOrder(inspectOrder.id)
+                  setInspectOrder(null)
+                  onToast(`Order ${inspectOrder.orderNumber} deleted`)
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+              >
+                <Trash2 size={13} />
+                <span>Delete</span>
+              </button>
+            </div>
+
+            {/* Inline Replace Tool */}
+            {isReplacingItem && (
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <div className="text-xs font-bold text-slate-700">Select replacement product:</div>
+                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                  {products.map((prod) => (
+                    <button
+                      key={prod.id}
+                      type="button"
+                      onClick={() => {
+                        inspectOrder.items[0] = {
+                          productTitle: prod.title,
+                          quantity: 1,
+                          price: prod.sell,
+                          image: prod.image,
+                        }
+                        inspectOrder.totalAmount = prod.cost
+                        inspectOrder.profit = prod.profit
+                        setIsReplacingItem(false)
+                        onToast(`Replaced item with "${prod.title}"`)
+                      }}
+                      className="p-2 bg-white rounded-xl border border-slate-200 text-left hover:border-indigo-500 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <img src={prod.image} alt={prod.title} className="w-8 h-8 rounded-lg object-cover" />
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold text-slate-900 truncate">{prod.title}</div>
+                        <div className="text-[10px] text-slate-500">${prod.sell.toFixed(2)}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Date:</span>
-                <span className="font-medium text-slate-700">{inspectOrder.date}</span>
+            )}
+
+            {/* Inline Edit Form */}
+            {isEditingOrder && (
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                <div className="text-xs font-bold text-slate-700">Edit Order Details:</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={editCustomerName}
+                    onChange={(e) => setEditCustomerName(e.target.value)}
+                    placeholder="Customer Name"
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white"
+                  />
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="Phone"
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  placeholder="Shipping Address"
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      inspectOrder.customerName = editCustomerName
+                      inspectOrder.customerEmail = editPhone
+                      inspectOrder.shippingAddress = editAddress
+                      setIsEditingOrder(false)
+                      onToast('Order details updated')
+                    }}
+                    className="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold cursor-pointer"
+                  >
+                    Save
+                  </button>
+                </div>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Customer:</span>
-                <span className="font-semibold text-slate-900">{inspectOrder.customerName}</span>
+            )}
+
+            {/* Seller Line */}
+            <div className="text-xs text-slate-500">
+              Seller <b className="text-slate-900 ml-1">tester</b>
+            </div>
+
+            {/* 5 Metric Cards Grid matching Screenshot 2 */}
+            <div className="space-y-2.5">
+              {/* Row 1: Quantity, Unit Price, Total Revenue */}
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="p-3 rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    QUANTITY
+                  </div>
+                  <div className="text-base font-extrabold text-slate-900 mt-1">
+                    {inspectOrder.items[0]?.quantity || 1}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    UNIT PRICE
+                  </div>
+                  <div className="text-base font-extrabold text-slate-900 mt-1">
+                    ${Number(inspectOrder.items[0]?.price || 17.99).toFixed(2)}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    TOTAL REVENUE
+                  </div>
+                  <div className="text-base font-extrabold text-slate-900 mt-1">
+                    ${((inspectOrder.items[0]?.price || 17.99) * (inspectOrder.items[0]?.quantity || 1)).toFixed(2)}
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Email:</span>
-                <span className="text-slate-700">{inspectOrder.customerEmail}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Shipping To:</span>
-                <span className="text-slate-700 text-right max-w-[200px] truncate">{inspectOrder.shippingAddress}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Status:</span>
-                <span className="font-bold uppercase text-indigo-600">{inspectOrder.status}</span>
-              </div>
-              <div className="flex justify-between py-1.5 font-bold text-sm text-slate-900">
-                <span>Total Amount:</span>
-                <span>${Number(inspectOrder.totalAmount).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between py-1 text-emerald-600 font-bold">
-                <span>Seller Profit:</span>
-                <span>+${Number(inspectOrder.profit).toFixed(2)}</span>
+
+              {/* Row 2: Seller Cost & Seller Profit */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-3 rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    SELLER COST
+                  </div>
+                  <div className="text-base font-extrabold text-slate-900 mt-1">
+                    ${Number(inspectOrder.totalAmount || 14.64).toFixed(2)}
+                  </div>
+                </div>
+
+                {/* Vibrant Solid Purple Card matching Screenshot 2 */}
+                <div className="p-3.5 rounded-2xl bg-[#5443ED] text-white shadow-md">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-white/80">
+                    SELLER PROFIT
+                  </div>
+                  <div className="text-base font-extrabold text-white mt-1">
+                    ${Number(inspectOrder.profit || 3.35).toFixed(2)}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
-              <button
-                type="button"
-                className="flex-1 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer"
-                onClick={() => {
-                  window.print?.()
-                  onToast('Printing order receipt...')
-                }}
-              >
-                Print Receipt
-              </button>
-              <button
-                type="button"
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
-                onClick={() => setInspectOrder(null)}
-              >
-                Close
-              </button>
+            {/* Customer Box matching Screenshot 2 */}
+            <div className="p-4 rounded-2xl border border-slate-200/80 bg-white shadow-xs space-y-1.5">
+              <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold tracking-wider uppercase">
+                <User size={13} />
+                <span>CUSTOMER</span>
+              </div>
+              <div className="font-bold text-sm text-slate-900">
+                {inspectOrder.customerName}
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                <Phone size={13} className="text-slate-400 shrink-0" />
+                <span>{inspectOrder.customerEmail}</span>
+              </div>
+              <div className="flex items-start gap-1.5 text-xs text-slate-600">
+                <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" />
+                <span className="leading-snug">{inspectOrder.shippingAddress}</span>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* 5. Delete Confirmation Modal */}
+      {/* 4. Delete Confirmation Modal */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-sm w-full p-5 space-y-3 animate-in fade-in zoom-in-95 duration-150">
@@ -1588,6 +1761,7 @@ export function AdminOrdersView({
                 onClick={() => {
                   onDeleteOrder(deleteConfirmId)
                   setDeleteConfirmId(null)
+                  onToast('Order removed')
                 }}
               >
                 Delete Order

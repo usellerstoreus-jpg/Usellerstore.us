@@ -118,6 +118,21 @@ export const shopCategories = [
 ] as const
 
 export const initialProducts: Product[] = [
+  // Exact reference product matching screenshots
+  {
+    id: 'prod-mibasies-makeup-bag',
+    title: 'mibasies 2 PCS Initial Makeup Bags: Mothers Day Gifts for Women - Best Friend Birthday Gifts Graduation Gifts Wedding Bridesmaid Girlfriend Wife Daughter Sister Girl Gifts - Orange M',
+    category: 'Bags',
+    cost: 14.64,
+    sell: 17.99,
+    profit: 3.35,
+    rating: 4.8,
+    reviewCount: 342,
+    stock: 120,
+    sku: 'MIB-BAG-ORG-M',
+    status: 'active',
+    image: '/products/mibasies_makeup_bag.jpg',
+  },
   // 12 Products matching user's reference screenshot
   {
     id: 'prod-omega-seamaster-auto',
@@ -774,7 +789,27 @@ export const initialProducts: Product[] = [
   }
 ]
 
-export const initialOrders: Order[] = []
+export const initialOrders: Order[] = [
+  {
+    id: 'ord-ec60cb68',
+    orderNumber: '#ec60cb68',
+    customerName: 'Usellerstore',
+    customerEmail: '28288282',
+    shippingAddress: 'KCXASCJAI, FWEUFH, EFUWEF, DIQWDJ, WDJI, United States',
+    date: '15 Sept, 15:12',
+    status: 'paid', // Displays as Pending
+    totalAmount: 14.64, // Seller cost is 14.64, Total revenue is 17.99
+    profit: 3.35,
+    items: [
+      {
+        productTitle: 'mibasies 2 PCS Initial Makeup Bags: Mothers Day Gifts for Women - Best Friend Birthday Gifts Graduation Gifts Wedding Bridesmaid Girlfriend Wife Daughter Sister Girl Gifts - Orange M',
+        quantity: 1,
+        price: 17.99,
+        image: '/products/mibasies_makeup_bag.jpg',
+      },
+    ],
+  },
+]
 
 export const initialNotifications: NotificationItem[] = [
   {
