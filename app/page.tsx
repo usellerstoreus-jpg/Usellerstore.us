@@ -7,7 +7,6 @@ import {
   Sparkles,
   Users,
   Search,
-  LogIn,
   UserPlus,
   Loader2,
   AlertCircle,
@@ -1120,9 +1119,6 @@ function AuthScreen({
                   {sellerAuthMode === 'signin' ? (
                     <form onSubmit={handleSellerSignIn}>
                       <div className="form-intro">
-                        <span className="form-icon">
-                          <LogIn size={20} />
-                        </span>
                         <span className="eyebrow">WELCOME BACK</span>
                         <h2>Sign in to your store</h2>
                         <p>Enter your credentials to access your merchant dashboard.</p>
