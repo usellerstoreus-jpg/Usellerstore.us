@@ -17,7 +17,7 @@ import {
   fetchSellerProfiles,
 } from '@/lib/supabase/api'
 import { isSupabaseConfigured } from '@/lib/supabase/client'
-import { AdminSellersView } from '@/components/admin/AdminSellersView'
+import { AdminSupportView } from '@/components/admin/AdminSupportView'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import {
   Grid2X2,
@@ -49,14 +49,13 @@ const adminNav = [
   { label: 'My Logs', icon: FileText, group: 'Activity' },
 ]
 
-export default function AdminSellersPage() {
+export default function AdminSupportPage() {
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
   const [orders, setOrders] = useState<Order[]>(initialOrders)
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [profile, setProfile] = useState<SellerProfile>(initialSellerProfile)
   const [sellers, setSellers] = useState<SellerProfile[]>([])
-  const [activeTab, setActiveTab] = useState('Sellers')
+  const [activeTab, setActiveTab] = useState('Support')
   const [toast, setToast] = useState('')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
@@ -64,10 +63,6 @@ export default function AdminSellersPage() {
     setToast(message)
     setTimeout(() => setToast(''), 2800)
   }
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   useEffect(() => {
     try {
@@ -109,7 +104,7 @@ export default function AdminSellersPage() {
         if (supaProfile) setProfile(supaProfile)
         if (supaSellers && supaSellers.length > 0) setSellers(supaSellers)
       } catch (err) {
-        console.warn('[AdminSellers] Sync error:', err)
+        console.warn('[AdminSupport] Sync error:', err)
       }
     }
     syncSupabase()
@@ -148,24 +143,24 @@ export default function AdminSellersPage() {
 
         {/* Administrator User Card */}
         <div className="admin-user p-4 flex items-center gap-3">
-          <div className="avatar admin-avatar relative w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
-            z<span className="online-dot absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-white" />
+          <div className="avatar admin-avatar relative w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
+            z<span className="online-dot absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white" />
           </div>
           <div>
             <strong className="text-sm font-bold text-slate-900 block leading-tight">zain</strong>
-            <span className="text-xs text-slate-400 font-normal block leading-tight mt-0.5">Administrator</span>
+            <span className="text-xs text-slate-400 font-medium block leading-tight">Administrator</span>
           </div>
         </div>
 
         {/* Invite Code Widget */}
-        <div className="invite mx-3.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs text-slate-600">
-          <span className="text-[11px] text-slate-400 font-semibold tracking-wider">
-            INVITE <b className="text-slate-900 font-bold ml-1.5 text-xs">MXSVHSDL</b>
+        <div className="invite mx-4 p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs text-slate-600">
+          <span>
+            INVITE <b className="text-slate-900 font-bold ml-1">MXSVHSDL</b>
           </span>
-          <div className="flex items-center gap-2 text-slate-400">
-            <Copy size={13} className="hover:text-slate-700 cursor-pointer transition-colors" onClick={() => showToast('Invite code copied')} />
-            <Pencil size={13} className="hover:text-slate-700 cursor-pointer transition-colors" onClick={() => showToast('Edit invite code')} />
-            <RefreshCw size={13} className="hover:text-slate-700 cursor-pointer transition-colors" onClick={() => showToast('Refreshed invite code')} />
+          <div className="flex items-center gap-1.5 text-slate-400">
+            <Copy size={14} className="hover:text-slate-700 cursor-pointer" onClick={() => showToast('Invite code copied')} />
+            <Pencil size={14} className="hover:text-slate-700 cursor-pointer" onClick={() => showToast('Edit invite code')} />
+            <RefreshCw size={14} className="hover:text-slate-700 cursor-pointer" onClick={() => showToast('Refreshed invite code')} />
           </div>
         </div>
 
@@ -175,7 +170,7 @@ export default function AdminSellersPage() {
             const isFirstInGroup = index === 0 || adminNav[index - 1].group !== group
             const isActive = activeTab === label
             return (
-              <div key={label} className="relative">
+              <div key={label}>
                 {isFirstInGroup && (
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 pt-3 pb-1">
                     {group}
@@ -183,9 +178,9 @@ export default function AdminSellersPage() {
                 )}
                 <button
                   type="button"
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer relative ${
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-[#EEF2FF] text-indigo-600 font-bold'
+                      ? 'bg-[#EEF2FF] text-indigo-700 font-bold'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                   onClick={() => {
@@ -195,11 +190,11 @@ export default function AdminSellersPage() {
                     } else if (label === 'Orders') {
                       router.push('/admin/orders')
                     } else if (label === 'Sellers') {
-                      // Already here
+                      router.push('/admin/sellers')
                     } else if (label === 'KYC') {
                       router.push('/admin/kyc')
                     } else if (label === 'Support') {
-                      router.push('/admin/support')
+                      // Already here
                     } else if (label === 'Recent Actions' || label === 'My Logs') {
                       router.push(`/admin/activity?tab=${encodeURIComponent(label)}`)
                     } else {
@@ -207,9 +202,6 @@ export default function AdminSellersPage() {
                     }
                   }}
                 >
-                  {isActive && (
-                    <span className="absolute -left-3 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" />
-                  )}
                   <Icon size={17} className={isActive ? 'text-indigo-600' : 'text-slate-400'} />
                   <span>{label}</span>
                 </button>
@@ -232,9 +224,9 @@ export default function AdminSellersPage() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="admin-main flex-1 overflow-y-auto pb-16">
+      <main className="admin-main flex-1 overflow-y-auto p-4 sm:p-6">
         {/* Mobile Top Header */}
-        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-xs">
+        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-xs mb-4 rounded-xl">
           <div className="flex items-center gap-2.5">
             <button
               type="button"
@@ -246,7 +238,7 @@ export default function AdminSellersPage() {
             <BrandLogo size="sm" variant="light" showText={false} />
             <div>
               <strong className="text-xs font-bold text-white block leading-tight">Admin Console</strong>
-              <span className="text-[10px] text-purple-300 font-semibold">Sellers</span>
+              <span className="text-[10px] text-purple-300 font-semibold">Support</span>
             </div>
           </div>
           <button
@@ -258,47 +250,32 @@ export default function AdminSellersPage() {
           </button>
         </div>
 
-        <div className="p-4 sm:p-6 max-w-[1400px] mx-auto">
-          {mounted ? (
-            <AdminSellersView
-              initialSeller={profile}
-              sellers={sellers}
-              products={products}
-              orders={orders}
-              onToast={showToast}
-              onSwitchToSeller={(s) => {
-                if (s) {
-                  try {
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('u_seller_active_profile', JSON.stringify(s))
-                      localStorage.setItem(
-                        'u_auth_session',
-                        JSON.stringify({
-                          role: 'seller',
-                          profile: s,
-                          email: s.email,
-                          shopName: s.shopName,
-                          ownerName: s.ownerName,
-                        })
-                      )
-                    }
-                  } catch {}
-                }
-                router.push('/?mode=seller')
-              }}
-            />
-          ) : (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 animate-pulse" />
-                  <div className="h-6 w-32 bg-slate-200 rounded-lg animate-pulse" />
-                </div>
-                <div className="h-9 w-64 bg-slate-100 rounded-xl animate-pulse" />
-              </div>
-              <div className="h-28 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs animate-pulse" />
-            </div>
-          )}
+        <div className="max-w-[1400px] mx-auto">
+          <AdminSupportView
+            sellers={sellers}
+            activeSeller={profile}
+            onToast={showToast}
+            onSwitchToSeller={(s) => {
+              if (s) {
+                try {
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('u_seller_active_profile', JSON.stringify(s))
+                    localStorage.setItem(
+                      'u_auth_session',
+                      JSON.stringify({
+                        role: 'seller',
+                        profile: s,
+                        email: s.email,
+                        shopName: s.shopName,
+                        ownerName: s.ownerName,
+                      })
+                    )
+                  }
+                } catch {}
+              }
+              router.push('/?mode=seller')
+            }}
+          />
         </div>
       </main>
 

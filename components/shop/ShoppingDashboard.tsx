@@ -221,17 +221,17 @@ export function ShoppingDashboard({
 
   // Checkout Form State
   const [customerInfo, setCustomerInfo] = useState({
-    name: 'Emily Davis',
-    email: 'emily.davis@example.com',
-    phone: '+1 (555) 482-9912',
-    address: '452 Broadway Ave, Suite 4B',
-    city: 'New York',
-    state: 'NY',
-    zip: '10013',
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    zip: '',
     paymentMethod: 'card' as 'card' | 'paypal' | 'crypto' | 'cod',
-    cardNumber: '•••• •••• •••• 4242',
-    cardExp: '12/28',
-    cardCvc: '883',
+    cardNumber: '',
+    cardExp: '',
+    cardCvc: '',
   })
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
 
@@ -498,22 +498,6 @@ export function ShoppingDashboard({
     }
   }
 
-  const fillDemoCustomer = () => {
-    setCustomerInfo({
-      name: 'Alexander Wright',
-      email: 'alex.wright@example.com',
-      phone: '+1 (415) 555-0198',
-      address: '742 Evergreen Terrace',
-      city: 'San Francisco',
-      state: 'CA',
-      zip: '94107',
-      paymentMethod: 'card',
-      cardNumber: '•••• •••• •••• 5591',
-      cardExp: '08/27',
-      cardCvc: '419',
-    })
-    onToast('Demo customer details pre-filled')
-  }
 
   // Carousel handlers
   const prevSlide = () => {
@@ -1414,7 +1398,13 @@ export function ShoppingDashboard({
                 ) : (
                   cart.map(({ product, quantity }) => (
                     <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                      <img src={product.image} alt={product.title} className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0 bg-white" />
+                      {product.image && product.image.trim() ? (
+                        <img src={product.image} alt={product.title} className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0 bg-white" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-xl border border-slate-200 shrink-0 bg-slate-100 flex items-center justify-center text-slate-300">
+                          <Package size={20} />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <h5 className="font-bold text-xs text-slate-900 truncate">{product.title}</h5>
                         <p className="text-[11px] text-slate-500">${Number(product.sell).toFixed(2)} each</p>
@@ -1487,8 +1477,12 @@ export function ShoppingDashboard({
               <X size={18} />
             </button>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="aspect-square rounded-2xl bg-slate-100 overflow-hidden border border-slate-200">
-                <img src={quickViewProduct.image} alt={quickViewProduct.title} className="w-full h-full object-cover" />
+              <div className="aspect-square rounded-2xl bg-slate-100 overflow-hidden border border-slate-200 flex items-center justify-center">
+                {quickViewProduct.image && quickViewProduct.image.trim() ? (
+                  <img src={quickViewProduct.image} alt={quickViewProduct.title} className="w-full h-full object-cover" />
+                ) : (
+                  <Package size={48} className="text-slate-300" />
+                )}
               </div>
               <div className="space-y-4 flex flex-col justify-between">
                 <div className="space-y-2">
@@ -1537,14 +1531,6 @@ export function ShoppingDashboard({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  id="checkout-demo-fill-btn"
-                  onClick={fillDemoCustomer}
-                  className="px-3 py-1 text-xs bg-blue-50 text-[#0F52BA] hover:bg-blue-100 rounded-full font-bold border border-blue-200 cursor-pointer"
-                >
-                  ⚡ Auto-Fill Demo Details
-                </button>
                 <button type="button" onClick={() => setIsCheckoutOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer">
                   <X size={20} />
                 </button>

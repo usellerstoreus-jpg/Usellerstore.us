@@ -22,7 +22,7 @@ interface DashboardViewProps {
   profile: SellerProfile
   products: Product[]
   orders: Order[]
-  onNavigate: (tab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile') => void
+  onNavigate: (tab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile' | 'Withdraw') => void
   onOpenBalanceModal: () => void
   onOpenStorefront?: () => void
   onToast: (msg: string) => void
@@ -36,28 +36,61 @@ export function DashboardView({
   onNavigate,
   onOpenBalanceModal,
 }: DashboardViewProps) {
-  // Financial calculations from live state
-  const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), profile.balance)
-  const totalProfit = orders.reduce((sum, o) => sum + (Number(o.profit) || 0), 0)
-  const totalCost = Math.max(0, totalRevenue - totalProfit)
-  const deliveredOrders = orders.filter((o) => o.status === 'delivered').length
-  const pendingOrders = orders.filter((o) => ['unpaid', 'paid', 'pickup', 'on_the_way'].includes(o.status)).length
+  // Financial calculations from live state: Only delivered orders credit profit to dashboard
+  const deliveredOrdersList = orders.filter((o) => o.status === 'delivered')
+  const deliveredProfit = deliveredOrdersList.reduce((sum, o) => sum + (Number(o.profit) || 0), 0)
+  const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0)
+  const totalProfit = deliveredProfit > 0 ? deliveredProfit : (profile.balance > 0 ? profile.balance : 0)
+  const totalCost = Math.max(0, totalRevenue - deliveredProfit)
+  const deliveredOrders = deliveredOrdersList.length
+  const pendingOrders = orders.filter((o) =>
+    ['unpaid', 'paid', 'pickup', 'on_the_way', 'out_for_delivery'].includes(o.status)
+  ).length
   const profitMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(0) : '0'
 
-  const monthRevenue = totalRevenue * 0.72
-  const monthProfit = totalProfit > 0 ? totalProfit * 0.72 : totalRevenue * 0.22
+  const currentMonth = new Date().getMonth()
+  const currentYear = new Date().getFullYear()
+  const thisMonthOrders = orders.filter((o) => {
+    if (!o.date) return true
+    const d = new Date(o.date)
+    return !isNaN(d.getTime()) ? (d.getMonth() === currentMonth && d.getFullYear() === currentYear) : true
+  })
+  const monthRevenue = thisMonthOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0)
+  const monthProfit = thisMonthOrders
+    .filter((o) => o.status === 'delivered')
+    .reduce((sum, o) => sum + (Number(o.profit) || 0), 0)
 
-  // Category distribution matching reference screenshot
+  // Category distribution computed dynamically from live catalog products
   const categoryData = useMemo(() => {
-    return [
-      { name: 'Home & Kitchen', count: 267, percent: 55, color: '#3B82F6' },
-      { name: 'Health & Wellness', count: 45, percent: 9, color: '#10B981' },
-      { name: 'Sports & Outdoors', count: 27, percent: 6, color: '#8B5CF6' },
-      { name: 'Tablets', count: 18, percent: 4, color: '#F59E0B' },
-      { name: 'Under Garments', count: 18, percent: 4, color: '#EF4444' },
-      { name: 'Keyboards & Mice', count: 14, percent: 3, color: '#06B6D4' },
+    if (!products || products.length === 0) return []
+    const counts: Record<string, number> = {}
+    products.forEach((p) => {
+      const cat = p.category || 'General'
+      counts[cat] = (counts[cat] || 0) + 1
+    })
+
+    const colors = [
+      '#3B82F6',
+      '#10B981',
+      '#8B5CF6',
+      '#F59E0B',
+      '#EF4444',
+      '#06B6D4',
+      '#EC4899',
+      '#6366F1',
+      '#14B8A6',
     ]
-  }, [])
+
+    const total = products.length
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count], index) => ({
+        name,
+        count,
+        percent: total > 0 ? Math.round((count / total) * 100) : 0,
+        color: colors[index % colors.length],
+      }))
+  }, [products])
 
   return (
     <div className="dashboard-content-wrap space-y-6">
@@ -261,7 +294,7 @@ export function DashboardView({
           </div>
           <div className="min-w-0">
             <div suppressHydrationWarning className="font-bold text-slate-900 text-base leading-tight">
-              500
+              {products.length}
             </div>
             <div className="text-[11px] text-slate-500 leading-tight mt-0.5 truncate">Products</div>
           </div>
@@ -343,22 +376,26 @@ export function DashboardView({
               </div>
               <h2 className="text-base font-bold text-slate-900">Products by Category</h2>
             </div>
-            <span className="text-xs text-slate-400 font-medium">483 total</span>
+            <span className="text-xs text-slate-400 font-medium">{products.length} total</span>
           </div>
 
           <div className="space-y-4">
-            {categoryData.map((item) => (
-              <div key={item.name} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                  <span className="text-slate-700 font-medium truncate">{item.name}</span>
+            {categoryData.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">No products found in catalog.</p>
+            ) : (
+              categoryData.map((item) => (
+                <div key={item.name} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                    <span className="text-slate-700 font-medium truncate">{item.name}</span>
+                  </div>
+                  <div className="flex items-baseline gap-2 shrink-0">
+                    <span className="font-bold text-slate-900 tabular-nums">{item.count}</span>
+                    <span className="text-slate-400 text-xs tabular-nums">{item.percent}%</span>
+                  </div>
                 </div>
-                <div className="flex items-baseline gap-2 shrink-0">
-                  <span className="font-bold text-slate-900 tabular-nums">{item.count}</span>
-                  <span className="text-slate-400 text-xs tabular-nums">{item.percent}%</span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </section>

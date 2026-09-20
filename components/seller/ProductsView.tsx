@@ -20,6 +20,8 @@ import { ProductImageUploader } from './ProductImageUploader'
 interface ProductsViewProps {
   products: Product[]
   maxSlots?: number
+  isVerified?: boolean
+  onRequireKyc?: () => void
   onAddProduct: (product: Omit<Product, 'id'>) => void
   onUpdateProduct: (product: Product) => void
   onDeleteProduct: (id: string) => void
@@ -29,6 +31,8 @@ interface ProductsViewProps {
 export function ProductsView({
   products,
   maxSlots = 500,
+  isVerified = true,
+  onRequireKyc,
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
@@ -82,6 +86,11 @@ export function ProductsView({
   }, [products, searchQuery, selectedCategory])
 
   const openAddModal = () => {
+    if (isVerified === false) {
+      onToast('⚠️ Verification Required: Your store is in View-Only mode until KYC is approved.')
+      if (onRequireKyc) onRequireKyc()
+      return
+    }
     setFormData({
       title: '',
       category: 'Home & Kitchen',
@@ -111,6 +120,11 @@ export function ProductsView({
   }
 
   const handleOpenEdit = (prod: Product) => {
+    if (isVerified === false) {
+      onToast('⚠️ View-Only Mode: KYC Verification must be approved by Administrator to edit items.')
+      if (onRequireKyc) onRequireKyc()
+      return
+    }
     setSelectedProduct(prod)
     setFormData({
       title: prod.title,
@@ -141,6 +155,11 @@ export function ProductsView({
 
   const handleDelete = (prod: Product, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
+    if (isVerified === false) {
+      onToast('⚠️ View-Only Mode: Account must be approved by Administrator to delete products.')
+      if (onRequireKyc) onRequireKyc()
+      return
+    }
     setProductToDelete(prod)
   }
 
@@ -155,15 +174,22 @@ export function ProductsView({
           </p>
         </div>
 
-        <button
-          type="button"
-          id="add-products-header-btn"
-          className="add-product-btn flex items-center justify-center gap-2 bg-[#5e7793] hover:bg-[#4d647e] text-white font-medium px-4 py-2.5 rounded-lg shadow-sm transition-all w-full sm:w-auto cursor-pointer"
-          onClick={openAddModal}
-        >
-          <Plus size={18} />
-          <span>Add products</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {isVerified === false && (
+            <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold uppercase tracking-wider">
+              View-Only Mode
+            </span>
+          )}
+          <button
+            type="button"
+            id="add-products-header-btn"
+            className="add-product-btn flex items-center justify-center gap-2 bg-[#5e7793] hover:bg-[#4d647e] text-white font-medium px-4 py-2.5 rounded-lg shadow-sm transition-all w-full sm:w-auto cursor-pointer"
+            onClick={openAddModal}
+          >
+            <Plus size={18} />
+            <span>Add products</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -223,16 +249,22 @@ export function ProductsView({
             >
               {/* Product Thumbnail */}
               <div className="product-image-wrap w-24 h-24 flex-shrink-0 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 flex items-center justify-center relative">
-                <img
-                  src={product.image}
-                  alt={product.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  onError={(e) => {
-                    // fallback image
-                    ;(e.target as HTMLImageElement).src =
-                      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=500&q=80'
-                  }}
-                />
+                {product.image && product.image.trim() ? (
+                  <img
+                    src={product.image}
+                    alt={product.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => {
+                      // fallback image
+                      ;(e.target as HTMLImageElement).src =
+                        'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=500&q=80'
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 bg-slate-100">
+                    <Package size={28} />
+                  </div>
+                )}
               </div>
 
               {/* Product Details */}

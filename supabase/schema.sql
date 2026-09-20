@@ -58,23 +58,23 @@ create table if not exists public.notifications (
 
 -- 4. SELLER PROFILES TABLE
 create table if not exists public.seller_profiles (
-  id text primary key default 'tester-seller-1',
-  shop_name text not null default 'tester',
-  owner_name text not null default 'Zain',
-  email text not null default 'zain55@gmail.com',
-  phone text default '+1 (555) 234-5678',
+  id text primary key,
+  shop_name text not null,
+  owner_name text not null default '',
+  email text not null,
+  phone text default '',
   currency text default 'USD ($)',
   balance numeric(10, 2) not null default 0.00,
   guarantee numeric(10, 2) not null default 0.00,
   rating numeric(3, 2) not null default 5.0,
   total_orders integer not null default 0,
-  member_since text default 'Aug 2026',
-  verified boolean not null default true,
+  member_since text default '2026',
+  verified boolean not null default false,
   active boolean not null default true,
-  seo_title text default 'tester Official Store - Premium Products & Quick Delivery',
-  seo_description text default 'Shop top quality electronics, home goods, wellness and outdoor essentials from tester.',
-  avatar_letter text default 'Z',
-  payout_methods jsonb not null default '[{"type": "bank", "bankName": "Chase Bank USA", "accountNumber": "•••• •••• 8842", "accountHolder": "Zain"}]'::jsonb,
+  seo_title text default '',
+  seo_description text default '',
+  avatar_letter text default 'S',
+  payout_methods jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -132,41 +132,7 @@ alter publication supabase_realtime add table public.orders;
 alter publication supabase_realtime add table public.notifications;
 alter publication supabase_realtime add table public.seller_profiles;
 
--- 6. SEED INITIAL DATA (Upsert so it can be run multiple times safely)
-insert into public.seller_profiles (
-  id, shop_name, owner_name, email, phone, currency, balance, guarantee, rating, total_orders, member_since, verified, active, seo_title, seo_description, avatar_letter, payout_methods
-) values (
-  'tester-seller-1',
-  'tester',
-  'Zain',
-  'zain55@gmail.com',
-  '+1 (555) 234-5678',
-  'USD ($)',
-  0.00,
-  0.00,
-  5.0,
-  0,
-  'Aug 2026',
-  true,
-  true,
-  'tester Official Store - Premium Products & Quick Delivery',
-  'Shop top quality electronics, home goods, wellness and outdoor essentials from tester.',
-  'Z',
-  '[{"type": "bank", "bankName": "Chase Bank USA", "accountNumber": "•••• •••• 8842", "accountHolder": "Zain"}]'::jsonb
-) on conflict (id) do nothing;
-
-insert into public.notifications (id, title, description, date, time_ago, ref_code, type, read, details)
-values (
-  'notif-1',
-  'KYC approved',
-  'Your identity has been verified. You''re all set.',
-  '7 AUGUST 2026',
-  '7 Aug',
-  '#6bc54j84',
-  'kyc',
-  true,
-  'Your identity document (Passport / ID) submitted for store "tester" was reviewed and approved by the compliance team. You now have full seller privileges including withdrawals.'
-) on conflict (id) do nothing;
+-- 6. SCHEMA READY
 
 insert into public.products (id, title, category, cost, sell, profit, image, stock, sku, status)
 values

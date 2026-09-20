@@ -676,11 +676,17 @@ export function CustomerAccountPortal({
                       <div className="space-y-2">
                         {order.items.map((item, idx) => (
                           <div key={idx} className="flex items-center gap-3 text-xs">
-                            <img
-                              src={item.image}
-                              alt={item.productTitle}
-                              className="w-12 h-12 rounded-lg object-contain bg-slate-50 border border-slate-200 p-1 shrink-0"
-                            />
+                            {item.image && item.image.trim() ? (
+                              <img
+                                src={item.image}
+                                alt={item.productTitle}
+                                className="w-12 h-12 rounded-lg object-contain bg-slate-50 border border-slate-200 p-1 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-300">
+                                <Package size={18} />
+                              </div>
+                            )}
                             <div className="flex-1 min-w-0">
                               <p className="font-bold text-slate-900 truncate">
                                 {item.productTitle}
@@ -751,11 +757,15 @@ export function CustomerAccountPortal({
                       </button>
 
                       <div className="aspect-square w-full rounded-xl bg-white flex items-center justify-center p-2 mb-2">
-                        <img
-                          src={p.image}
-                          alt={p.title}
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                        />
+                        {p.image && p.image.trim() ? (
+                          <img
+                            src={p.image}
+                            alt={p.title}
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                          />
+                        ) : (
+                          <Package size={32} className="text-slate-300" />
+                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -830,11 +840,15 @@ export function CustomerAccountPortal({
                       >
                         {/* Product Image */}
                         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-white border border-slate-100 p-2 flex items-center justify-center shrink-0">
-                          <img
-                            src={product.image}
-                            alt={product.title}
-                            className="w-full h-full object-contain"
-                          />
+                          {product.image && product.image.trim() ? (
+                            <img
+                              src={product.image}
+                              alt={product.title}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <Package size={28} className="text-slate-300" />
+                          )}
                         </div>
 
                         {/* Title & Price */}

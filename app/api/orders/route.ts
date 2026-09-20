@@ -45,18 +45,23 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    const mappedOrders: Order[] = (data || []).map((row: any) => ({
-      id: row.id,
-      orderNumber: row.order_number,
-      customerName: row.customer_name,
-      customerEmail: row.customer_email || '',
-      shippingAddress: row.shipping_address || '',
-      items: row.items || [],
-      totalAmount: Number(row.total_amount),
-      profit: Number(row.profit),
-      status: row.status as Order['status'],
-      date: row.date || '',
-    }))
+    const mappedOrders: Order[] = (data || []).map((row: any) => {
+      const firstItem = Array.isArray(row.items) ? row.items[0] : null
+      const extractedSellerId = row.seller_id || (firstItem && firstItem.sellerId) || ''
+      return {
+        id: row.id,
+        orderNumber: row.order_number,
+        customerName: row.customer_name,
+        customerEmail: row.customer_email || '',
+        shippingAddress: row.shipping_address || '',
+        items: row.items || [],
+        totalAmount: Number(row.total_amount),
+        profit: Number(row.profit),
+        status: row.status as Order['status'],
+        date: row.date || '',
+        sellerId: extractedSellerId,
+      }
+    })
 
     return NextResponse.json({ orders: mappedOrders })
   } catch (err: any) {
@@ -79,6 +84,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid order data provided' }, { status: 400 })
     }
 
+    const sellerId = order.sellerId || (order.items && order.items[0]?.sellerId) || ''
+    const enrichedItems = (order.items || []).map((item: any) => ({
+      ...item,
+      sellerId: item.sellerId || sellerId,
+    }))
+
     // 1. Insert order record into 'orders' table
     const { data: insertedOrder, error: orderError } = await client
       .from('orders')
@@ -88,7 +99,7 @@ export async function POST(request: Request) {
         customer_name: order.customerName,
         customer_email: order.customerEmail || '',
         shipping_address: order.shippingAddress || '',
-        items: order.items || [],
+        items: enrichedItems,
         total_amount: Number(order.totalAmount),
         profit: Number(order.profit),
         status: order.status || 'paid',
@@ -152,19 +163,23 @@ export async function POST(request: Request) {
       console.warn('[API /api/orders] Error inserting notification:', notifErr)
     }
 
-    // 4. Update seller balance and total_orders in 'seller_profiles' table
+    // 4. Update seller profile: ONLY credit profit if the order is already marked delivered
     try {
-      const { data: profileData } = await client
-        .from('seller_profiles')
-        .select('id, balance, total_orders')
-        .limit(1)
-        .single()
+      let profileQuery = client.from('seller_profiles').select('id, balance, total_orders')
+      const targetSellerId = (order as any).sellerId
+      if (targetSellerId) {
+        profileQuery = profileQuery.eq('id', targetSellerId)
+      } else {
+        profileQuery = profileQuery.limit(1)
+      }
+
+      const { data: profileData } = await profileQuery.maybeSingle()
 
       if (profileData) {
         const currentBalance = Number(profileData.balance) || 0
         const currentOrders = Number(profileData.total_orders) || 0
-        const profitToAdd = Number(order.profit) || 0
-
+        // Profit is ONLY added if status is delivered!
+        const profitToAdd = order.status === 'delivered' ? (Number(order.profit) || 0) : 0
         const newBalance = Number((currentBalance + profitToAdd).toFixed(2))
         const newTotalOrders = currentOrders + 1
 
@@ -178,7 +193,7 @@ export async function POST(request: Request) {
           .eq('id', profileData.id)
       }
     } catch (profErr) {
-      console.warn('[API /api/orders] Error updating seller profile:', profErr)
+      console.warn('[API /api/orders] Error updating seller profile on create:', profErr)
     }
 
     const finalOrder: Order = {
@@ -192,6 +207,7 @@ export async function POST(request: Request) {
       profit: Number(insertedOrder.profit),
       status: insertedOrder.status,
       date: insertedOrder.date,
+      sellerId,
     }
 
     return NextResponse.json({
@@ -204,3 +220,148 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })
   }
 }
+
+// PATCH: Update order status and credit profit to seller when order is delivered
+export async function PATCH(request: Request) {
+  const client = getAdminClient()
+  if (!client) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 500 })
+  }
+
+  try {
+    const body = await request.json()
+    const { orderId, status: newStatus, sellerId } = body
+
+    if (!orderId || !newStatus) {
+      return NextResponse.json({ error: 'orderId and status are required' }, { status: 400 })
+    }
+
+    // 1. Fetch current order
+    const { data: orderData, error: fetchErr } = await client
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .maybeSingle()
+
+    if (fetchErr || !orderData) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    }
+
+    const oldStatus = orderData.status
+    const orderProfit = Number(orderData.profit) || 0
+
+    // 2. Update order status
+    const { error: updateErr } = await client
+      .from('orders')
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId)
+
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 400 })
+    }
+
+    // 3. Handle seller balance adjustments
+    let newBalance: number | null = null
+
+    // Target seller profile
+    let profileQuery = client.from('seller_profiles').select('id, balance, total_orders, shop_name')
+    if (sellerId) {
+      profileQuery = profileQuery.eq('id', sellerId)
+    } else {
+      profileQuery = profileQuery.limit(1)
+    }
+    const { data: profile } = await profileQuery.maybeSingle()
+
+    if (profile) {
+      const currentBalance = Number(profile.balance) || 0
+
+      // A) Moving to DELIVERED from a non-delivered status -> CREDIT profit
+      if (newStatus === 'delivered' && oldStatus !== 'delivered') {
+        newBalance = Number((currentBalance + orderProfit).toFixed(2))
+
+        await client
+          .from('seller_profiles')
+          .update({
+            balance: newBalance,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', profile.id)
+
+        // Notification of delivered order & profit credited
+        try {
+          await client.from('notifications').insert({
+            id: 'notif-deliv-' + Date.now(),
+            title: 'Order Delivered & Profit Credited',
+            description: `Order ${orderData.order_number} has been delivered! $${orderProfit.toFixed(2)} profit added to balance.`,
+            date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase(),
+            time_ago: 'Just now',
+            ref_code: orderData.order_number,
+            type: 'order',
+            read: false,
+            details: `Order ${orderData.order_number} successfully completed delivery. Profit of $${orderProfit.toFixed(2)} credited to ${profile.shop_name} balance (New balance: $${newBalance.toFixed(2)}).`,
+          })
+        } catch {}
+      }
+      // B) Moving from DELIVERED to CANCELLED -> REVERSE profit
+      else if (oldStatus === 'delivered' && newStatus === 'cancelled') {
+        newBalance = Number(Math.max(0, currentBalance - orderProfit).toFixed(2))
+
+        await client
+          .from('seller_profiles')
+          .update({
+            balance: newBalance,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', profile.id)
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      orderId,
+      oldStatus,
+      newStatus,
+      profitCredited: newStatus === 'delivered' && oldStatus !== 'delivered' ? orderProfit : 0,
+      newBalance,
+    })
+  } catch (err: any) {
+    console.error('[API /api/orders] PATCH error:', err)
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })
+  }
+}
+
+// DELETE: Delete all orders or specific order by ID
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get('id')
+  const client = getAdminClient()
+
+  if (!client) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 500 })
+  }
+
+  try {
+    if (id) {
+      const { error } = await client.from('orders').delete().eq('id', id)
+      if (error) throw error
+    } else {
+      // Clear all orders
+      const { error: delErr } = await client.from('orders').delete().neq('id', '')
+      if (delErr) throw delErr
+      // Clear order notifications
+      await client.from('notifications').delete().eq('type', 'order')
+      // Reset total_orders in seller_profiles
+      await client.from('seller_profiles').update({ total_orders: 0 }).neq('id', '')
+    }
+
+    return NextResponse.json({ success: true, message: id ? `Order ${id} deleted` : 'All orders deleted and revenue reset' })
+  } catch (err: any) {
+    console.error('[API /api/orders] DELETE error:', err)
+    return NextResponse.json({ error: err.message || 'Failed to delete orders' }, { status: 500 })
+  }
+}
+
+

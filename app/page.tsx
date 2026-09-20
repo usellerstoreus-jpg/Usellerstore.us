@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
   Check,
   X,
@@ -23,6 +23,7 @@ import {
   ShoppingBag,
   ShieldCheck,
   HeartPulse,
+  MessageSquare,
   WalletCards,
   Activity,
   Grid2X2,
@@ -45,6 +46,7 @@ import {
   LayoutDashboard,
   Package,
   Bell,
+  Volume2,
   User,
   LogOut,
   FileText
@@ -66,11 +68,20 @@ import { OrdersView } from '@/components/seller/OrdersView'
 import { NotificationsView } from '@/components/seller/NotificationsView'
 import { ProfileView } from '@/components/seller/ProfileView'
 import { BalanceModal } from '@/components/seller/BalanceModal'
+import { WithdrawView } from '@/components/seller/WithdrawView'
 import { SupportChatModal } from '@/components/seller/SupportChatModal'
 import { ShoppingDashboard } from '@/components/shop/ShoppingDashboard'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { AdminOrdersView } from '@/components/admin/AdminOrdersView'
 import { AdminSellersView } from '@/components/admin/AdminSellersView'
+import { AdminSupportView } from '@/components/admin/AdminSupportView'
+import { AdminWithdrawalsView } from '@/components/admin/AdminWithdrawalsView'
+import { KycBanner } from '@/components/seller/KycBanner'
+import { KycSubmitModal } from '@/components/seller/KycSubmitModal'
+import { AdminKycModal } from '@/components/admin/AdminKycModal'
+import { AdminActivityView } from '@/components/admin/AdminActivityView'
+import { recordActivityLog, getDeviceDetails, getLocationDetails } from '@/lib/activity-logger'
+import { playNotificationSound, initAudioUnlock } from '@/lib/notification-sound'
 import {
   fetchProducts,
   createProduct,
@@ -80,11 +91,14 @@ import {
   createOrder,
   updateOrderStatus,
   deleteOrder,
+  deleteAllOrders,
   fetchNotifications,
+  createNotification,
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
   fetchSellerProfile,
+  fetchSellerProfiles,
   updateSellerProfile,
   signUpSeller,
   signInSeller,
@@ -96,14 +110,14 @@ import {
 import { isSupabaseConfigured } from '@/lib/supabase/client'
 
 type Mode = 'seller' | 'admin' | 'login' | 'shop'
-type SellerTab = 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile'
+type SellerTab = 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile' | 'Withdraw'
 
 const adminNav = [
   { label: 'Dashboard', icon: Grid2X2, group: 'Manage' },
   { label: 'Sellers', icon: Users, group: 'Manage' },
   { label: 'KYC', icon: ShieldCheck, group: 'Manage' },
   { label: 'Orders', icon: ShoppingBag, group: 'Manage' },
-  { label: 'Support', icon: HeartPulse, group: 'Communication' },
+  { label: 'Support', icon: MessageSquare, group: 'Communication' },
   { label: 'Withdrawals', icon: WalletCards, group: 'Finance' },
   { label: 'Recent Actions', icon: Activity, group: 'Activity' },
   { label: 'My Logs', icon: FileText, group: 'Activity' },
@@ -118,6 +132,75 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
         <X size={15} />
       </button>
     </div>
+  )
+}
+
+function SellerNotificationPopup({
+  popup,
+  onClose,
+  onView,
+}: {
+  popup: {
+    id?: string
+    title: string
+    description: string
+    type?: 'new' | 'available'
+    count?: number
+  }
+  onClose: () => void
+  onView: () => void
+}) {
+  return (
+    <aside
+      aria-label="Notification alert"
+      className="fixed top-4 right-4 sm:top-5 sm:right-6 z-50 max-w-sm sm:max-w-md w-[calc(100%-2rem)] p-4 bg-white/95 backdrop-blur-md border border-blue-200/90 rounded-2xl shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4"
+    >
+      <div className="flex items-start gap-3">
+        <div className="relative shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center shadow-md">
+          <Bell size={20} className="animate-bounce" />
+          <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full animate-ping" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-extrabold uppercase tracking-wider">
+              <Volume2 size={11} className="text-blue-600" />
+              {popup.type === 'available' ? 'Available Alert' : 'New Alert'}
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium">Just now</span>
+          </div>
+          <h4 className="text-sm font-bold text-slate-900 truncate">
+            {popup.title}
+          </h4>
+          <p className="text-xs text-slate-600 mt-0.5 line-clamp-2 leading-relaxed">
+            {popup.description}
+          </p>
+          <div className="mt-2.5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onView}
+              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              View Notifications
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-2.5 py-1 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition-colors cursor-pointer"
+          aria-label="Close notification alert"
+        >
+          <X size={16} />
+        </button>
+      </div>
+    </aside>
   )
 }
 
@@ -157,12 +240,7 @@ function AdminSidebar({
         }`}
       >
         <div className="brand flex items-center justify-between p-4 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <BrandLogo size="md" />
-            <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider">
-              Admin
-            </span>
-          </div>
+          <BrandLogo size="md" subtitle="Management Console" />
           {isOpenOnMobile && (
             <button
               type="button"
@@ -232,6 +310,7 @@ function AdminPanel({
   orders,
   products,
   sellerProfile,
+  sellers = [],
   onUpdateOrderStatus,
   onDeleteOrder,
   onCreateOrder,
@@ -244,30 +323,61 @@ function AdminPanel({
   orders: Order[]
   products?: Product[]
   sellerProfile?: SellerProfile
+  sellers?: SellerProfile[]
   onUpdateOrderStatus?: (orderId: string, newStatus: Order['status']) => void
   onDeleteOrder?: (orderId: string) => void
   onCreateOrder?: (newOrder: Order) => Promise<void> | void
   onCreateDemoOrder?: () => void
   onToast: (message: string) => void
   onSignOut: () => void
-  onSwitchToSeller: () => void
+  onSwitchToSeller: (seller?: SellerProfile) => void
   initialTab?: string
 }) {
-  const [active, setActive] = useState(initialTab)
+  const [active, setActive] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search)
+      const tab = p.get('tab')
+      if (tab) return tab
+    }
+    return initialTab
+  })
   const [search, setSearch] = useState('')
   const [deleted, setDeleted] = useState(false)
   const [menu, setMenu] = useState(false)
-  const [kycStatus, setKycStatus] = useState<'pending' | 'approved'>('pending')
-  const [withdrawalStatus, setWithdrawalStatus] = useState<'pending' | 'completed'>('pending')
+  const [kycStatus, setKycStatus] = useState<'pending' | 'approved'>('approved')
+  const [withdrawalStatus, setWithdrawalStatus] = useState<'pending' | 'completed'>('completed')
   const [isAdminMobileOpen, setIsAdminMobileOpen] = useState(false)
 
-  const sellerVisible = useMemo(() => 'tester'.includes(search.toLowerCase()) || 'zain'.includes(search.toLowerCase()), [search])
+  // Real platform metrics from actual database data
+  const totalGMV = orders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0)
+  const deliveredOrdersCount = orders.filter((o) => o.status === 'delivered').length
+  const inProgressOrdersCount = orders.filter(
+    (o) => o.status !== 'delivered' && o.status !== 'cancelled'
+  ).length
+  const activeSellersCount = sellers.filter((s) => !s.isSuspended).length
+  const pendingKycCount = sellers.filter((s) => !s.verified).length
 
   return (
     <div className="app-shell admin-shell">
       <AdminSidebar
         active={active}
         onNavigate={(label) => {
+          if (label === 'KYC') {
+            window.location.href = '/admin/kyc'
+            return
+          } else if (label === 'Sellers') {
+            window.location.href = '/admin/sellers'
+            return
+          } else if (label === 'Orders') {
+            window.location.href = '/admin/orders'
+            return
+          } else if (label === 'Dashboard') {
+            window.location.href = '/admin/dashboard'
+            return
+          } else if (label === 'Withdrawals') {
+            window.location.href = '/admin/withdrawals'
+            return
+          }
           setActive(label)
           onToast(`${label} view selected`)
         }}
@@ -293,19 +403,21 @@ function AdminPanel({
               <span className="text-[10px] text-purple-300 font-semibold">{active}</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition-colors flex items-center gap-1 cursor-pointer"
-            onClick={() => {
-              onSwitchToSeller()
-              onToast('Switched to Seller Storefront view')
-            }}
-          >
-            <Store size={13} /> Storefront
-          </button>
+          {active !== 'Withdrawals' && (
+            <button
+              type="button"
+              className="px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition-colors flex items-center gap-1 cursor-pointer"
+              onClick={() => {
+                onSwitchToSeller()
+                onToast('Switched to Seller Storefront view')
+              }}
+            >
+              <Store size={13} /> Storefront
+            </button>
+          )}
         </div>
 
-        {active !== 'Orders' && (
+        {active !== 'Orders' && active !== 'Withdrawals' && (
           <div className="admin-topbar hidden md:flex">
             <div className="admin-heading">
               <span className="section-mark">
@@ -341,7 +453,7 @@ function AdminPanel({
         <div className="p-6 space-y-6">
           {active === 'Dashboard' && (
             <>
-              {/* 4 Admin KPI Cards */}
+              {/* 4 Admin KPI Cards matching actual live data */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="kpi-card">
                   <div className="flex justify-between items-start mb-2">
@@ -352,9 +464,12 @@ function AdminPanel({
                       <CircleDollarSign size={18} />
                     </span>
                   </div>
-                  <strong className="text-2xl font-black text-slate-900 block">$48,250.00</strong>
-                  <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1 mt-1">
-                    <TrendingUp size={13} /> +24.8% this month
+                  <strong className="text-2xl font-black text-slate-900 block tabular-nums">
+                    ${totalGMV.toFixed(2)}
+                  </strong>
+                  <span className="text-xs text-slate-500 font-medium flex items-center gap-1 mt-1">
+                    <TrendingUp size={13} className="text-emerald-600" />
+                    <span>Total order merchandise volume</span>
                   </span>
                 </div>
 
@@ -367,8 +482,12 @@ function AdminPanel({
                       <Users size={18} />
                     </span>
                   </div>
-                  <strong className="text-2xl font-black text-slate-900 block">14 Stores</strong>
-                  <span className="text-xs text-slate-400 mt-1 block">100% operational</span>
+                  <strong className="text-2xl font-black text-slate-900 block tabular-nums">
+                    {sellers.length} {sellers.length === 1 ? 'Store' : 'Stores'}
+                  </strong>
+                  <span className="text-xs text-emerald-600 font-semibold mt-1 block">
+                    {activeSellersCount} active · 100% operational
+                  </span>
                 </div>
 
                 <div className="kpi-card">
@@ -380,8 +499,12 @@ function AdminPanel({
                       <ShoppingBag size={18} />
                     </span>
                   </div>
-                  <strong className="text-2xl font-black text-slate-900 block">382</strong>
-                  <span className="text-xs text-purple-600 font-semibold mt-1 block">99.4% fulfillment</span>
+                  <strong className="text-2xl font-black text-slate-900 block tabular-nums">
+                    {orders.length}
+                  </strong>
+                  <span className="text-xs text-purple-600 font-semibold mt-1 block">
+                    {deliveredOrdersCount} delivered · {inProgressOrdersCount} in progress
+                  </span>
                 </div>
 
                 <div className="kpi-card">
@@ -389,16 +512,19 @@ function AdminPanel({
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                       KYC Compliance
                     </span>
-                    <span className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                    <span className={`p-2 rounded-xl ${pendingKycCount > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
                       <ShieldAlert size={18} />
                     </span>
                   </div>
-                  <strong className="text-2xl font-black text-slate-900 block">
-                    {kycStatus === 'pending' ? '1 Pending' : '0 Pending'}
+                  <strong className="text-2xl font-black text-slate-900 block tabular-nums">
+                    {pendingKycCount === 0 ? '0 Pending' : `${pendingKycCount} Pending`}
                   </strong>
-                  <span className="text-xs text-amber-600 font-semibold mt-1 block">Requires review</span>
+                  <span className={`text-xs font-semibold mt-1 block ${pendingKycCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {pendingKycCount === 0 ? '100% sellers verified' : 'Requires review'}
+                  </span>
                 </div>
               </div>
+
 
               {/* Platform Overview Table */}
               <div className="panel p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
@@ -429,53 +555,51 @@ function AdminPanel({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium">
-                      <tr className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3.5">
-                          <div className="font-bold text-slate-900 flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-md bg-blue-600 text-white grid place-items-center text-[10px]">T</span>
-                            tester Official Store
-                          </div>
-                          <span className="text-slate-400 text-[10px]">zain55@gmail.com</span>
-                        </td>
-                        <td className="py-3.5 text-slate-700">Zain</td>
-                        <td className="py-3.5"><span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[10px]">VERIFIED</span></td>
-                        <td className="py-3.5 font-bold text-slate-900">$0.00</td>
-                        <td className="py-3.5"><span className="text-emerald-600 font-semibold flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online</span></td>
-                        <td className="py-3.5 text-right">
-                          <button
-                            type="button"
-                            className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-[11px] cursor-pointer"
-                            onClick={() => {
-                              onSwitchToSeller()
-                              onToast('Viewing tester store dashboard')
-                            }}
-                          >
-                            Login as Seller
-                          </button>
-                        </td>
-                      </tr>
-                      <tr className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3.5">
-                          <div className="font-bold text-slate-900 flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-md bg-purple-600 text-white grid place-items-center text-[10px]">A</span>
-                            Apex Trends Retail
-                          </div>
-                          <span className="text-slate-400 text-[10px]">alex@apextrends.com</span>
-                        </td>
-                        <td className="py-3.5 text-slate-700">Alex Miller</td>
-                        <td className="py-3.5"><span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-200 text-[10px]">TIER 1</span></td>
-                        <td className="py-3.5 font-bold text-slate-900">$1,420.50</td>
-                        <td className="py-3.5"><span className="text-emerald-600 font-semibold flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online</span></td>
-                        <td className="py-3.5 text-right">
-                          <button
-                            type="button"
-                            className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-[11px] cursor-pointer"
-                            onClick={() => onToast('Apex Trends details opened')}
-                          >
-                            View Details
-                          </button>
-                        </td>
-                      </tr>
+                      {sellers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-xs text-slate-400 font-normal">
+                            No registered sellers found in the database.
+                          </td>
+                        </tr>
+                      ) : (
+                        sellers.map((s) => (
+                          <tr key={s.id || s.email} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-3.5">
+                              <div className="font-bold text-slate-900 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-md bg-blue-600 text-white grid place-items-center text-[10px] font-bold">
+                                  {(s.shopName || 'S')[0]?.toUpperCase()}
+                                </span>
+                                {s.shopName}
+                              </div>
+                              <span className="text-slate-400 text-[10px]">{s.email}</span>
+                            </td>
+                            <td className="py-3.5 text-slate-700">{s.ownerName || s.shopName}</td>
+                            <td className="py-3.5">
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[10px]">
+                                {s.isSuspended ? 'SUSPENDED' : 'VERIFIED'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 font-bold text-slate-900">${(s.balance || 0).toFixed(2)}</td>
+                            <td className="py-3.5">
+                              <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                              </span>
+                            </td>
+                            <td className="py-3.5 text-right">
+                              <button
+                                type="button"
+                                className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-[11px] cursor-pointer"
+                                onClick={() => {
+                                  onSwitchToSeller(s)
+                                  onToast(`Switched to ${s.shopName}`)
+                                }}
+                              >
+                                Login as Seller
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -486,6 +610,7 @@ function AdminPanel({
           {active === 'Sellers' && (
             <AdminSellersView
               initialSeller={sellerProfile || initialSellerProfile}
+              sellers={sellers}
               products={products || initialProducts}
               orders={orders || initialOrders}
               onToast={onToast}
@@ -512,8 +637,8 @@ function AdminPanel({
                       <FileCheck size={20} />
                     </div>
                     <div>
-                      <strong className="text-sm font-bold text-slate-900 block">Zain (tester Official Store)</strong>
-                      <span className="text-xs text-slate-500">Document: Passport & Proof of Address (Ref: #6bc54j84)</span>
+                      <strong className="text-sm font-bold text-slate-900 block">{sellerProfile?.ownerName || 'Merchant'} ({sellerProfile?.shopName || 'Store'})</strong>
+                      <span className="text-xs text-slate-500">Document: Passport & Proof of Address</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -529,7 +654,7 @@ function AdminPanel({
                       className="px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-bold cursor-pointer shadow-xs"
                       onClick={() => {
                         setKycStatus('approved')
-                        onToast('KYC verified and approved for Zain (tester)!')
+                        onToast(`KYC verified and approved for ${sellerProfile?.ownerName || 'Merchant'}!`)
                       }}
                     >
                       Approve Verification
@@ -547,40 +672,11 @@ function AdminPanel({
           )}
 
           {active === 'Withdrawals' && (
-            <div className="panel p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900 m-0">Merchant Settlement Requests</h2>
-                  <p className="text-xs text-slate-500 mt-1 m-0">Review and authorize store payout withdrawals</p>
-                </div>
-              </div>
-
-              {withdrawalStatus === 'pending' ? (
-                <div className="border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div>
-                    <strong className="text-sm font-bold text-slate-900 block">Zain (Store: tester) — $142.50 USD</strong>
-                    <span className="text-xs text-slate-500">Destination: Chase Bank USA (Account: •••• 8842)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold cursor-pointer shadow-xs"
-                      onClick={() => {
-                        setWithdrawalStatus('completed')
-                        onToast('Payout of $142.50 approved & settled!')
-                      }}
-                    >
-                      Approve Payout
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="py-10 text-center text-slate-400">
-                  <CheckCircle size={36} className="mx-auto mb-2 text-emerald-500" />
-                  <p className="font-bold text-slate-700 text-sm">All withdrawal requests processed!</p>
-                </div>
-              )}
-            </div>
+            <AdminWithdrawalsView
+              sellers={sellers}
+              onToast={onToast}
+              onOpenMobileMenu={() => setIsAdminMobileOpen(true)}
+            />
           )}
 
           {active === 'Orders' && (
@@ -588,48 +684,33 @@ function AdminPanel({
               orders={orders}
               products={products || initialProducts}
               sellerProfile={sellerProfile || initialSellerProfile}
+              sellers={sellers}
               onUpdateOrderStatus={onUpdateOrderStatus || (() => {})}
               onDeleteOrder={onDeleteOrder || (() => {})}
-              onCreateOrder={onCreateOrder || onCreateDemoOrder || (() => {})}
+              onCreateOrder={onCreateOrder || (() => {})}
               onToast={onToast}
               onSwitchToSeller={onSwitchToSeller}
             />
           )}
 
-          {active === 'My Logs' && (
-            <div className="panel p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-3">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 m-0">Administrator Action Logs</h2>
-                  <p className="text-xs text-slate-500 m-0 mt-0.5">Security audit trail of platform modifications and order overrides</p>
-                </div>
-                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Audit Logging Active
-                </span>
-              </div>
-              <div className="space-y-2 text-xs font-mono">
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                  <span className="text-slate-700 font-semibold">[ORDER_UPDATE] Order status updated to &apos;on_the_way&apos;</span>
-                  <span className="text-slate-400">Just now</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                  <span className="text-slate-700 font-semibold">[MERCHANT_SYNC] Verified seller state &amp; inventory check passed</span>
-                  <span className="text-slate-400">12 min ago</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                  <span className="text-slate-700 font-semibold">[SETTLEMENT] Merchant payout threshold calculated</span>
-                  <span className="text-slate-400">1 hour ago</span>
-                </div>
-              </div>
-            </div>
+          {(active === 'Recent Actions' || active === 'My Logs') && (
+            <AdminActivityView
+              sellers={sellers}
+              products={products}
+              activeTab={active}
+              onOpenMobileMenu={() => setIsAdminMobileOpen(true)}
+              onToast={onToast}
+              onSwitchToSeller={onSwitchToSeller}
+            />
           )}
 
-          {(active === 'Support' || active === 'Recent Actions') && (
-            <div className="admin-placeholder">
-              <Sparkles size={28} />
-              <h2>{active} Management</h2>
-              <p>This workspace is active and monitoring platform activity in real-time.</p>
-            </div>
+          {active === 'Support' && (
+            <AdminSupportView
+              sellers={sellers}
+              activeSeller={sellerProfile}
+              onToast={onToast}
+              onSwitchToSeller={onSwitchToSeller}
+            />
           )}
         </div>
       </main>
@@ -653,8 +734,8 @@ function AuthScreen({
   const [sellerAuthMode, setSellerAuthMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
 
   // Seller Sign In fields
-  const [signInEmail, setSignInEmail] = useState('zain55@gmail.com')
-  const [signInPassword, setSignInPassword] = useState('••••••••')
+  const [signInEmail, setSignInEmail] = useState('')
+  const [signInPassword, setSignInPassword] = useState('')
   const [showSignInPassword, setShowSignInPassword] = useState(false)
 
   // Seller Sign Up fields
@@ -701,6 +782,53 @@ function AuthScreen({
 
       if (res.success && res.profile) {
         onToast(`Welcome back, ${res.profile.ownerName || res.profile.shopName}!`)
+        // Record real seller login activity log
+        try {
+          const [device, location] = await Promise.all([
+            Promise.resolve(getDeviceDetails()),
+            getLocationDetails(),
+          ])
+          await recordActivityLog({
+            action: 'seller_login',
+            category: 'seller_logins',
+            logType: 'login',
+            title: 'Signed in',
+            description: `Merchant "${res.profile.ownerName || res.profile.shopName}" (${res.profile.email}) signed in from ${location.formatted}.`,
+            user: {
+              name: res.profile.ownerName || res.profile.shopName,
+              email: res.profile.email,
+              role: 'seller',
+              shopName: res.profile.shopName,
+              avatar: res.profile.avatarLetter,
+            },
+            location,
+            device,
+            status: 'success',
+            isThisDevice: true,
+          })
+
+          // Record directly into seller's login history
+          try {
+            const historyKey = `u_seller_login_history_${res.profile.id}`
+            const stored = localStorage.getItem(historyKey)
+            const existing = stored ? JSON.parse(stored) : []
+            const now = new Date()
+            const pad = (n: number) => String(n).padStart(2, '0')
+            const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+            const session = {
+              id: `sess-${Date.now()}`,
+              timestamp,
+              rawDate: now.toISOString(),
+              ip: location.ip || '154.192.21.105',
+              device: `${device.type} • ${device.os.replace(' 10/11', '')} • ${device.browser.split(' ')[0]}`,
+              location: location.formatted || `${location.city}, ${location.region || location.city}, ${location.country}`,
+              countryCode: location.countryCode || 'PK',
+              userAgent: device.userAgent,
+              status: 'Success',
+            }
+            localStorage.setItem(historyKey, JSON.stringify([session, ...existing.filter((s: any) => s.id !== session.id)].slice(0, 50)))
+          } catch {}
+        } catch {}
         onLoginSuccess(res.profile)
       } else {
         setErrorMessage(res.error || 'Invalid credentials. Please check your email and password.')
@@ -737,14 +865,45 @@ function AuthScreen({
 
     setIsLoading(true)
     try {
+      const [deviceInfo, locationInfo] = await Promise.all([
+        Promise.resolve(getDeviceDetails()),
+        getLocationDetails(),
+      ])
+
       const res = await signUpSeller({
         email: signUpEmail,
         password: signUpPassword,
         shopName,
         ownerName: fullName,
+        metadata: {
+          device: deviceInfo,
+          location: locationInfo,
+        },
       })
 
       if (res.success && res.profile) {
+        // Record user sign up activity log with device, location and timestamp
+        await recordActivityLog({
+          action: 'user_signup',
+          title: 'User Sign Up',
+          description: `Merchant "${fullName}" (${signUpEmail}) registered store "${shopName}".`,
+          user: {
+            name: fullName,
+            email: signUpEmail,
+            role: 'seller',
+            shopName,
+            avatar: shopName.charAt(0).toUpperCase() || 'S',
+          },
+          location: locationInfo,
+          device: deviceInfo,
+          status: 'success',
+          metadata: {
+            ownerName: fullName,
+            shopName,
+            registeredAt: new Date().toISOString(),
+          },
+        })
+
         if (res.needsEmailConfirmation) {
           setSuccessMessage('Registration successful! Please check your email inbox to confirm your account.')
           onToast('Account created! Please verify your email.')
@@ -786,6 +945,29 @@ function AuthScreen({
 
       if (res.success && res.admin) {
         onToast('Administrator authentication confirmed!')
+        try {
+          const [device, location] = await Promise.all([
+            Promise.resolve(getDeviceDetails()),
+            getLocationDetails(),
+          ])
+          await recordActivityLog({
+            action: 'admin_login',
+            category: 'seller_logins',
+            logType: 'login',
+            title: 'Signed in',
+            description: `Administrator ${adminEmail} signed in from ${location.formatted}.`,
+            user: {
+              name: res.admin.name || 'Administrator',
+              email: adminEmail,
+              role: 'admin',
+              avatar: 'A',
+            },
+            location,
+            device,
+            status: 'success',
+            isThisDevice: true,
+          })
+        } catch {}
         onAdminSuccess(res.admin)
       } else {
         setErrorMessage(res.error || 'Access denied: Invalid administrator credentials.')
@@ -1154,21 +1336,6 @@ function AuthScreen({
                           Create account
                         </button>
                       </p>
-
-                      <p className="login-foot" style={{ marginTop: '10px' }}>
-                        Demo prototype ·{' '}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSignInEmail('zain55@gmail.com')
-                            setSignInPassword('password123')
-                            onToast('Demo store access granted')
-                            onLoginSuccess(initialSellerProfile)
-                          }}
-                        >
-                          Continue as tester
-                        </button>
-                      </p>
                     </form>
                   ) : (
                     <form onSubmit={handleSellerSignUp}>
@@ -1411,11 +1578,26 @@ export default function Page() {
   const [modeOpen, setModeOpen] = useState(false)
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isKycModalOpen, setIsKycModalOpen] = useState(false)
+  const [isKycViewModalOpen, setIsKycViewModalOpen] = useState(false)
+  const [notificationPopup, setNotificationPopup] = useState<{
+    id?: string
+    title: string
+    description: string
+    type?: 'new' | 'available'
+    count?: number
+  } | null>(null)
+
+  const prevModeRef = useRef<Mode | null>(null)
+  const knownNotifIdsRef = useRef<Set<string>>(new Set())
+  const hasAlertedOpenRef = useRef<boolean>(false)
+  const isDataLoadedRef = useRef<boolean>(false)
 
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [orders, setOrders] = useState<Order[]>(initialOrders)
   const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications)
   const [profile, setProfile] = useState<SellerProfile>(initialSellerProfile)
+  const [sellers, setSellers] = useState<SellerProfile[]>([])
 
   const showToast = (message: string) => {
     setToast(message)
@@ -1434,6 +1616,15 @@ export default function Page() {
             setProfile(session.profile)
             setMode('seller')
           }
+        }
+
+        // Support URL parameter override e.g. ?mode=admin or ?tab=Withdraw
+        const urlParams = new URLSearchParams(window.location.search)
+        if (urlParams.get('mode') === 'admin') {
+          setMode('admin')
+        }
+        if (urlParams.get('tab') === 'Withdraw' || urlParams.get('tab') === 'withdraw') {
+          setSellerTab('Withdraw')
         }
 
         const storedProds = localStorage.getItem('u_seller_products')
@@ -1455,16 +1646,24 @@ export default function Page() {
           const parsed = JSON.parse(storedNotifs)
           if (Array.isArray(parsed)) setNotifications(parsed)
         }
+
+        const storedSellers = localStorage.getItem('u_all_sellers')
+        if (storedSellers) {
+          const parsed = JSON.parse(storedSellers)
+          if (Array.isArray(parsed) && parsed.length > 0) setSellers(parsed)
+        }
+        isDataLoadedRef.current = true
       }
     } catch {}
 
     if (!isSupabaseConfigured()) return
     try {
-      const [supaProds, supaOrders, supaNotifs, supaProfile] = await Promise.all([
+      const [supaProds, supaOrders, supaNotifs, supaProfile, supaSellers] = await Promise.all([
         fetchProducts(),
         fetchOrders(),
         fetchNotifications(),
         fetchSellerProfile(),
+        fetchSellerProfiles(),
       ])
       if (supaProds !== null) {
         setProducts(supaProds)
@@ -1486,14 +1685,117 @@ export default function Page() {
         } catch {}
       }
       if (supaProfile) setProfile(supaProfile)
+      if (supaSellers && supaSellers.length > 0) setSellers(supaSellers)
     } catch (err) {
       console.warn('[Supabase] Sync error:', err)
+    } finally {
+      isDataLoadedRef.current = true
     }
   }
 
   useEffect(() => {
     loadSupabaseData()
+    initAudioUnlock()
   }, [])
+
+  // Auto-dismiss notification popup after 6 seconds
+  useEffect(() => {
+    if (!notificationPopup) return
+    const timer = setTimeout(() => {
+      setNotificationPopup(null)
+    }, 6000)
+    return () => clearTimeout(timer)
+  }, [notificationPopup])
+
+  // Cross-tab and live notification event listener
+  useEffect(() => {
+    const handleNotifUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent
+      const newNotif = customEvent.detail?.notification as NotificationItem | undefined
+      if (newNotif) {
+        setNotifications((prev) => {
+          if (prev.some((n) => n.id === newNotif.id)) return prev
+          return [newNotif, ...prev]
+        })
+      } else {
+        try {
+          const stored = localStorage.getItem('u_seller_notifications')
+          if (stored) {
+            const parsed = JSON.parse(stored)
+            if (Array.isArray(parsed)) setNotifications(parsed)
+          }
+        } catch {}
+      }
+    }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'u_seller_notifications' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue)
+          if (Array.isArray(parsed)) setNotifications(parsed)
+        } catch {}
+      }
+    }
+
+    window.addEventListener('u_seller_notifications_update', handleNotifUpdate)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener('u_seller_notifications_update', handleNotifUpdate)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
+
+  // Listen for real-time support chat messages from Admin to notify seller
+  useEffect(() => {
+    const handleSupportChatUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent
+      const detail = customEvent.detail
+      if (!detail) return
+
+      const { sellerEmail, message, sender } = detail
+      if (sender === 'admin' && message) {
+        const currentActiveEmail = profile.email || ''
+        if (!sellerEmail || (currentActiveEmail && sellerEmail.toLowerCase() === currentActiveEmail.toLowerCase())) {
+          // 1. Play chime audio
+          playNotificationSound()
+
+          // 2. Show live toast alert
+          const preview = message.text.length > 45 ? message.text.slice(0, 45) + '...' : message.text
+          showToast(`💬 Support Agent: "${preview}"`)
+
+          // 3. Add to notifications state and local storage
+          const newNotif: NotificationItem = {
+            id: 'support-notif-' + message.id,
+            title: 'New Support Message',
+            description: `Support Agent: "${message.text}"`,
+            date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase(),
+            timeAgo: 'Just now',
+            refCode: 'SUPPORT',
+            type: 'system',
+            read: false,
+            details: `Message received at ${message.time}: "${message.text}". Open Support Chat to reply.`,
+          }
+
+          // Mark ID so the seller notification effect doesn't double-chime
+          knownNotifIdsRef.current.add(newNotif.id)
+
+          setNotifications((prev) => {
+            if (prev.some((n) => n.id === newNotif.id)) return prev
+            const updated = [newNotif, ...prev]
+            try {
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('u_seller_notifications', JSON.stringify(updated))
+              }
+            } catch {}
+            return updated
+          })
+        }
+      }
+    }
+
+    window.addEventListener('u_support_chat_update', handleSupportChatUpdate)
+    return () => window.removeEventListener('u_support_chat_update', handleSupportChatUpdate)
+  }, [profile.email])
 
   const signOut = async () => {
     await signOutSeller()
@@ -1501,14 +1803,27 @@ export default function Page() {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('u_auth_session')
         localStorage.removeItem('u_seller_active_profile')
+        localStorage.removeItem('u_seller_notifications')
+        localStorage.removeItem('u_seller_orders')
       }
     } catch {}
+    setOrders([])
+    setNotifications([])
     setMode('login')
     showToast('You have been signed out')
   }
 
   const handleSellerSuccess = (newProfile: SellerProfile) => {
     setProfile(newProfile)
+    setSellers((prev) => {
+      const idx = prev.findIndex((s) => s.email === newProfile.email || s.id === newProfile.id)
+      if (idx >= 0) {
+        const copy = [...prev]
+        copy[idx] = newProfile
+        return copy
+      }
+      return [newProfile, ...prev]
+    })
     try {
       if (typeof window !== 'undefined') {
         localStorage.setItem('u_auth_session', JSON.stringify({ role: 'seller', profile: newProfile }))
@@ -1530,6 +1845,12 @@ export default function Page() {
   }
 
   const handleAddProduct = async (newProd: Omit<Product, 'id'>) => {
+    if (!profile.verified) {
+      showToast('⚠️ KYC Verification Required: Your store is in View-Only mode until approved.')
+      setIsKycModalOpen(true)
+      return
+    }
+
     const fallbackImage =
       newProd.image ||
       'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=500&q=80'
@@ -1576,10 +1897,46 @@ export default function Page() {
       return updated
     })
 
+    // Record real product addition activity log
+    try {
+      const [device, location] = await Promise.all([
+        Promise.resolve(getDeviceDetails()),
+        getLocationDetails(),
+      ])
+      await recordActivityLog({
+        action: 'product_added',
+        category: 'products',
+        logType: 'action',
+        title: 'Added a product',
+        description: `Added "${productToAdd.title}" priced at $${productToAdd.sell.toFixed(2)}.`,
+        user: {
+          name: profile.ownerName || profile.shopName || 'Store Owner',
+          email: profile.email || 'zain55@gmail.com',
+          role: 'seller',
+          shopName: profile.shopName,
+          avatar: profile.avatarLetter,
+        },
+        product: {
+          id: productToAdd.id,
+          title: productToAdd.title,
+          price: productToAdd.sell,
+          image: productToAdd.image,
+        },
+        location,
+        device,
+        status: 'success',
+      })
+    } catch {}
+
     showToast(`Product "${productToAdd.title.slice(0, 24)}..." added to store!`)
   }
 
   const handleUpdateProduct = async (updated: Product) => {
+    if (!profile.verified) {
+      showToast('⚠️ View-Only Mode: Account must be approved to edit products.')
+      setIsKycModalOpen(true)
+      return
+    }
     setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
     const success = await updateProduct(updated)
     if (success) {
@@ -1588,11 +1945,40 @@ export default function Page() {
   }
 
   const handleDeleteProduct = async (id: string) => {
+    if (!profile.verified) {
+      showToast('⚠️ View-Only Mode: Account must be approved to delete products.')
+      setIsKycModalOpen(true)
+      return
+    }
     const toDelete = products.find((p) => p.id === id)
     // Update local state immediately
     setProducts((prev) => prev.filter((p) => p.id !== id))
     const success = await deleteProduct(id)
     if (success) {
+      // Record real product deletion activity log
+      try {
+        const [device, location] = await Promise.all([
+          Promise.resolve(getDeviceDetails()),
+          getLocationDetails(),
+        ])
+        await recordActivityLog({
+          action: 'product_deleted',
+          category: 'products',
+          logType: 'action',
+          title: 'Deleted a product',
+          description: `Deleted "${toDelete?.title || id}".`,
+          user: {
+            name: profile.ownerName || profile.shopName || 'Store Owner',
+            email: profile.email || 'zain55@gmail.com',
+            role: 'seller',
+            shopName: profile.shopName,
+            avatar: profile.avatarLetter,
+          },
+          location,
+          device,
+          status: 'info',
+        })
+      } catch {}
       showToast(`Product "${toDelete?.title?.slice(0, 24) || id}..." permanently deleted from database`)
     } else {
       showToast('Error deleting product from database')
@@ -1603,37 +1989,7 @@ export default function Page() {
     }
   }
 
-  const handleCreateDemoOrder = async () => {
-    const demoOrder: Order = {
-      id: 'ord-' + Date.now(),
-      orderNumber: '#ORD-' + Math.floor(10000 + Math.random() * 90000),
-      customerName: 'Sarah Jenkins',
-      customerEmail: 'sarah.j@example.com',
-      shippingAddress: '742 Evergreen Terrace, Springfield, OR',
-      date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
-      status: 'paid',
-      totalAmount: 59.95,
-      profit: 12.42,
-      items: [
-        {
-          productTitle: 'Superfeet All-Purpose Support Medium Arch Insoles',
-          quantity: 1,
-          price: 59.95,
-          image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=500&q=80',
-        },
-      ],
-    }
-    const saved = await createOrder(demoOrder)
-    setOrders((prev) => [saved || demoOrder, ...prev])
-    const newBalance = Number((profile.balance + 12.42).toFixed(2))
-    const newTotalOrders = profile.totalOrders + 1
-    setProfile((prev) => ({
-      ...prev,
-      balance: newBalance,
-      totalOrders: newTotalOrders,
-    }))
-    await updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders })
-  }
+
 
   const handleCreateOrderFromShop = async (newOrder: Order) => {
     const saved = await createOrder(newOrder)
@@ -1654,8 +2010,9 @@ export default function Page() {
     // Update orders list
     setOrders((prev) => [activeOrder, ...prev.filter((o) => o.id !== activeOrder.id)])
 
-    // Update seller balance & total orders
-    const profitToAdd = Number(activeOrder.profit) || 0
+    // Update seller balance & total orders: ONLY credit profit if the order is delivered
+    const isDelivered = activeOrder.status === 'delivered'
+    const profitToAdd = isDelivered ? (Number(activeOrder.profit) || 0) : 0
     const newBalance = Number((profile.balance + profitToAdd).toFixed(2))
     const newTotalOrders = profile.totalOrders + 1
     const updatedProfile = {
@@ -1678,32 +2035,84 @@ export default function Page() {
       read: false,
       details: `Customer ${activeOrder.customerName} (${activeOrder.customerEmail}) purchased ${activeOrder.items?.length || 0} item(s) totaling $${Number(activeOrder.totalAmount).toFixed(2)}. Profit: $${Number(activeOrder.profit).toFixed(2)}. Delivery to: ${activeOrder.shippingAddress}.`,
     }
-    setNotifications((prev) => [newNotif, ...prev])
+    setNotifications((prev) => {
+      const updated = [newNotif, ...prev]
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('u_seller_notifications', JSON.stringify(updated))
+          window.dispatchEvent(new CustomEvent('u_seller_notifications_update', { detail: { notification: newNotif } }))
+        }
+      } catch {}
+      return updated
+    })
+    createNotification(newNotif).catch(() => {})
 
-    showToast(`Order ${activeOrder.orderNumber} recorded in database! (+$${profitToAdd.toFixed(2)} profit)`)
+    if (isDelivered) {
+      showToast(`Order ${activeOrder.orderNumber} recorded and delivered! (+$${profitToAdd.toFixed(2)} profit)`)
+    } else {
+      showToast(`Order ${activeOrder.orderNumber} recorded in Pending stage! Profit will be added on Delivery.`)
+    }
   }
 
-  const handleUpdateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
+  const handleUpdateOrderStatus = async (
+    orderId: string,
+    newStatus: Order['status'],
+    targetSellerId?: string
+  ) => {
+    if (!profile.verified) {
+      showToast('⚠️ Verification Required: Your store is in View-Only mode until KYC is approved.')
+      setIsKycModalOpen(true)
+      return
+    }
     const order = orders.find((o) => o.id === orderId)
     if (!order) return
 
-    // If order is moved to cancelled, reverse profit from seller balance
-    if (newStatus === 'cancelled' && order.status !== 'cancelled') {
-      const profitToDeduct = Number(order.profit) || 0
-      const newBalance = Number(Math.max(0, profile.balance - profitToDeduct).toFixed(2))
-      setProfile((prev) => ({ ...prev, balance: newBalance }))
-      await updateSellerProfile({ balance: newBalance })
-    } else if (order.status === 'cancelled' && newStatus !== 'cancelled') {
-      // If restoring an order from cancelled back to active
-      const profitToAdd = Number(order.profit) || 0
-      const newBalance = Number((profile.balance + profitToAdd).toFixed(2))
-      setProfile((prev) => ({ ...prev, balance: newBalance }))
-      await updateSellerProfile({ balance: newBalance })
+    const oldStatus = order.status
+    if (oldStatus === newStatus) return
+
+    // Enforce stage progression: direct transition to delivered without passing stages is blocked
+    if (newStatus === 'delivered') {
+      const normStatus = oldStatus === 'unpaid' ? 'paid' : oldStatus
+      if (normStatus !== 'out_for_delivery') {
+        showToast('Order must be paid to process before it can be completed.')
+        return
+      }
+    }
+
+    // Find the target seller to credit or debit
+    const sellerToUpdate = sellers.find((s) => s.id === (targetSellerId || order.sellerId)) || profile
+    let updatedBalance = sellerToUpdate.balance
+    const profit = Number(order.profit) || 0
+
+    // Moving to DELIVERED from non-delivered: CREDIT PROFIT
+    if (newStatus === 'delivered' && oldStatus !== 'delivered') {
+      updatedBalance = Number((sellerToUpdate.balance + profit).toFixed(2))
+      if (sellerToUpdate.id === profile.id || !sellerToUpdate.id) {
+        setProfile((prev) => ({ ...prev, balance: updatedBalance }))
+      }
+      setSellers((prev) =>
+        prev.map((s) => (s.id === sellerToUpdate.id ? { ...s, balance: updatedBalance } : s))
+      )
+      await updateSellerProfile({ balance: updatedBalance }, sellerToUpdate.id)
+      showToast(`🎉 Order ${order.orderNumber} DELIVERED! +$${profit.toFixed(2)} profit added to dashboard`)
+    }
+    // Moving from DELIVERED to CANCELLED: REVERSE PROFIT
+    else if (oldStatus === 'delivered' && newStatus === 'cancelled') {
+      updatedBalance = Number(Math.max(0, sellerToUpdate.balance - profit).toFixed(2))
+      if (sellerToUpdate.id === profile.id || !sellerToUpdate.id) {
+        setProfile((prev) => ({ ...prev, balance: updatedBalance }))
+      }
+      setSellers((prev) =>
+        prev.map((s) => (s.id === sellerToUpdate.id ? { ...s, balance: updatedBalance } : s))
+      )
+      await updateSellerProfile({ balance: updatedBalance }, sellerToUpdate.id)
+      showToast(`Order ${order.orderNumber} cancelled. Profit reversed from dashboard`)
+    } else {
+      showToast(`Order ${order.orderNumber} status updated to ${newStatus.replace(/_/g, ' ')}`)
     }
 
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)))
-    await updateOrderStatus(orderId, newStatus)
-    showToast(`Order ${order.orderNumber} status updated to ${newStatus.replace(/_/g, ' ')}`)
+    await updateOrderStatus(orderId, newStatus, sellerToUpdate.id)
   }
 
   const handleDeleteOrder = async (orderId: string) => {
@@ -1712,9 +2121,9 @@ export default function Page() {
 
     setOrders((prev) => prev.filter((o) => o.id !== orderId))
 
-    // Rebalance seller profile if profit was attached and not yet cancelled
+    // Rebalance seller profile only if profit was actually credited upon delivery
     let newBalance = profile.balance
-    if (orderToDelete.status !== 'cancelled') {
+    if (orderToDelete.status === 'delivered') {
       const profitToDeduct = Number(orderToDelete.profit) || 0
       newBalance = Number(Math.max(0, profile.balance - profitToDeduct).toFixed(2))
     }
@@ -1727,11 +2136,45 @@ export default function Page() {
     }))
 
     await Promise.all([
-      deleteOrder(orderId),
+      deleteOrder(orderId, orderToDelete.orderNumber),
       updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders }),
     ])
 
     showToast(`Order ${orderToDelete.orderNumber} permanently deleted`)
+  }
+
+  const handleDeleteAllOrders = async () => {
+    if (orders.length === 0) return
+    const orderCount = orders.length
+    const idsToDelete = orders.map((o) => o.id)
+
+    setOrders([])
+
+    // Rebalance seller profile: deduct profits of active orders
+    const profitsToDeduct = orders
+      .filter((o) => o.status !== 'cancelled')
+      .reduce((sum, o) => sum + (Number(o.profit) || 0), 0)
+    const newBalance = Number(Math.max(0, profile.balance - profitsToDeduct).toFixed(2))
+    const newTotalOrders = 0
+
+    setProfile((prev) => ({
+      ...prev,
+      balance: newBalance,
+      totalOrders: newTotalOrders,
+    }))
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('u_seller_orders', JSON.stringify([]))
+      } catch {}
+    }
+
+    await Promise.all([
+      deleteAllOrders(idsToDelete),
+      updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders }),
+    ])
+
+    showToast(`All ${orderCount} order(s) permanently deleted from console and database`)
   }
 
   const handleMarkAsRead = async (id: string) => {
@@ -1739,11 +2182,73 @@ export default function Page() {
     await markNotificationAsRead(id)
   }
 
-  const handleMarkAllAsRead = async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-    showToast('All notifications marked as read')
+  const handleMarkAllAsRead = async (silent = false) => {
+    setNotifications((prev) => {
+      const updated = prev.map((n) => ({ ...n, read: true }))
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('u_seller_notifications', JSON.stringify(updated))
+        }
+      } catch {}
+      return updated
+    })
+    if (!silent) {
+      showToast('All notifications marked as read')
+    }
     await markAllNotificationsAsRead()
   }
+
+  // Filter notifications strictly for the active seller
+  const sellerNotifications = useMemo(() => {
+    const cleanEmail = (profile?.email || '').trim().toLowerCase()
+    const cleanShop = (profile?.shopName || '').trim().toLowerCase()
+    const sellerOrderNumbers = new Set(orders.map((o) => (o.orderNumber || '').toLowerCase()))
+
+    return notifications.filter((notif) => {
+      // 1. Order notifications must belong to this seller's actual orders
+      if (notif.type === 'order') {
+        const ref = (notif.refCode || '').toLowerCase()
+        return sellerOrderNumbers.has(ref)
+      }
+
+      // 2. KYC notifications must not be for mock stores like "tester"
+      if (notif.type === 'kyc') {
+        const text = `${notif.description} ${notif.details || ''}`.toLowerCase()
+        if (text.includes('tester')) return false
+        if (cleanShop && text.includes('store "') && !text.includes(`store "${cleanShop}"`)) return false
+        return true
+      }
+
+      // 3. Merchant onboarding system notifications: only show for THIS seller's store registration
+      if (notif.type === 'system') {
+        const text = `${notif.description} ${notif.details || ''}`.toLowerCase()
+        if (notif.title === 'New Merchant Onboarded') {
+          if (!cleanEmail && !cleanShop) return false
+          return (cleanEmail && text.includes(cleanEmail)) || (cleanShop && text.includes(cleanShop))
+        }
+        return true
+      }
+
+      // 4. Payout notifications: exclude any referencing tester
+      if (notif.type === 'payout') {
+        const text = `${notif.description} ${notif.details || ''}`.toLowerCase()
+        if (text.includes('tester')) return false
+        return true
+      }
+
+      return true
+    })
+  }, [notifications, orders, profile])
+
+  // When the Notifications page/tab is visited, mark all notifications as read so the numbering becomes zero
+  useEffect(() => {
+    if (sellerTab === 'Notifications') {
+      const hasUnread = sellerNotifications.some((n) => !n.read)
+      if (hasUnread) {
+        handleMarkAllAsRead(true)
+      }
+    }
+  }, [sellerTab, sellerNotifications])
 
   const handleDeleteNotification = async (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id))
@@ -1756,15 +2261,204 @@ export default function Page() {
   }
 
   const handleWithdraw = async (amount: number) => {
+    if (!profile.verified) {
+      showToast('⚠️ Verification Required: Complete KYC verification to request withdrawals.')
+      setIsKycModalOpen(true)
+      return
+    }
     const newBal = Number(Math.max(0, profile.balance - amount).toFixed(2))
     setProfile((prev) => ({
       ...prev,
       balance: newBal,
     }))
     await updateSellerProfile({ balance: newBal })
+
+    // Record real withdrawal activity log
+    try {
+      const [device, location] = await Promise.all([
+        Promise.resolve(getDeviceDetails()),
+        getLocationDetails(),
+      ])
+      await recordActivityLog({
+        action: 'withdrawal_requested',
+        category: 'withdrawals_requested',
+        logType: 'balance',
+        title: 'Withdrawal Requested',
+        description: `Requested withdrawal of $${amount.toFixed(2)}.`,
+        amount,
+        user: {
+          name: profile.ownerName || profile.shopName || 'Store Owner',
+          email: profile.email || 'zain55@gmail.com',
+          role: 'seller',
+          shopName: profile.shopName,
+          avatar: profile.avatarLetter,
+        },
+        location,
+        device,
+        status: 'info',
+      })
+    } catch {}
+
+    // Push withdrawal record into admin settlement list
+    try {
+      if (typeof window !== 'undefined') {
+        const now = new Date()
+        const requestedDate = now.toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })
+        const newWd = {
+          id: `wd-${Date.now()}`,
+          sellerId: profile.id || 'seller-tester',
+          shopName: profile.shopName || 'tester',
+          ownerName: profile.ownerName || 'Zain',
+          email: profile.email || 'zain55@gmail.com',
+          avatar: (profile.shopName?.[0] || profile.ownerName?.[0] || 'T').toUpperCase(),
+          status: 'pending' as const,
+          amount,
+          requestedDate,
+          timestamp: Date.now(),
+          destinationMethod: 'Registered Settlement Account',
+          destinationDetails: 'Direct Bank / Card Settlement',
+        }
+        const stored = localStorage.getItem('u_admin_withdrawals_v1')
+        const list = stored ? JSON.parse(stored) : []
+        const updatedList = [newWd, ...(Array.isArray(list) ? list : [])]
+        localStorage.setItem('u_admin_withdrawals_v1', JSON.stringify(updatedList))
+        window.dispatchEvent(new CustomEvent('u_withdrawals_updated', { detail: updatedList }))
+      }
+    } catch {}
   }
 
-  const unreadNotifCount = notifications.filter((n) => !n.read).length
+  const currentSellerOrders = useMemo(() => {
+    if (!profile || !profile.id) return orders
+    return orders.filter((o) => {
+      if (o.sellerId) {
+        return o.sellerId === profile.id || o.sellerId === profile.email
+      }
+      return profile.id === 'seller-unverified-demo' || profile.id === 'seller-1'
+    })
+  }, [orders, profile])
+
+  const unreadNotifCount = sellerNotifications.filter((n) => !n.read).length
+
+  // Seller notification audio and pop-up trigger:
+  // 1. Plays sound and pops up alert when the seller account is opened if unread notifications are available
+  // 2. Plays sound and pops up alert whenever any new unread notification arrives while seller account is open
+  useEffect(() => {
+    if (mode !== 'seller') {
+      prevModeRef.current = mode
+      hasAlertedOpenRef.current = false
+      return
+    }
+
+    const currentIds = new Set(sellerNotifications.map((n) => n.id))
+    const unreadNotifs = sellerNotifications.filter((n) => !n.read)
+
+    // A. Seller account just opened (initial load or mode switch to seller)
+    if (!hasAlertedOpenRef.current || prevModeRef.current !== 'seller') {
+      // If data is still loading and notifications are empty, defer until populated
+      if (!isDataLoadedRef.current && sellerNotifications.length === 0) {
+        return
+      }
+
+      hasAlertedOpenRef.current = true
+      prevModeRef.current = 'seller'
+      knownNotifIdsRef.current = currentIds
+
+      if (unreadNotifs.length > 0) {
+        // Sound chime for available unread notifications upon opening seller console
+        playNotificationSound({ volume: 0.25, tone: 'chime' })
+
+        const count = unreadNotifs.length
+        const preview = unreadNotifs[0]
+        setNotificationPopup({
+          title: `${count} Unread Notification${count > 1 ? 's' : ''}`,
+          description: preview.title
+            ? `${preview.title}: ${preview.description || preview.details || ''}`
+            : `You have ${count} unread alert${count > 1 ? 's' : ''} available in your seller account.`,
+          type: 'available',
+          count,
+        })
+      }
+      return
+    }
+
+    // B. Seller account is ALREADY open: check for new unread notifications that arrived
+    const newArrivals = sellerNotifications.filter(
+      (n) => !n.read && !knownNotifIdsRef.current.has(n.id)
+    )
+
+    if (newArrivals.length > 0) {
+      const latest = newArrivals[0]
+      playNotificationSound({
+        volume: 0.28,
+        tone: latest.type === 'order' ? 'order' : 'chime',
+      })
+
+      setNotificationPopup({
+        id: latest.id,
+        title: latest.title,
+        description: latest.description || latest.details || 'New notification received.',
+        type: 'new',
+      })
+    }
+
+    knownNotifIdsRef.current = currentIds
+    prevModeRef.current = 'seller'
+  }, [mode, sellerNotifications])
+
+  // Periodic poll or visibilitychange sync for notifications when in seller mode
+  useEffect(() => {
+    if (mode !== 'seller') return
+
+    const syncSellerNotifs = async () => {
+      try {
+        if (isSupabaseConfigured()) {
+          const supaNotifs = await fetchNotifications()
+          if (supaNotifs) {
+            setNotifications((prev) => {
+              const prevIds = new Set(prev.map((n) => n.id))
+              const newItems = supaNotifs.filter((n) => !prevIds.has(n.id))
+              if (newItems.length > 0) {
+                return [...newItems, ...prev]
+              }
+              return prev
+            })
+          }
+        } else {
+          const stored = localStorage.getItem('u_seller_notifications')
+          if (stored) {
+            const parsed = JSON.parse(stored)
+            if (Array.isArray(parsed)) {
+              setNotifications((prev) => {
+                const prevIds = new Set(prev.map((n) => n.id))
+                const newItems = parsed.filter((n: NotificationItem) => !prevIds.has(n.id))
+                if (newItems.length > 0) {
+                  return [...newItems, ...prev]
+                }
+                return prev
+              })
+            }
+          }
+        }
+      } catch {}
+    }
+
+    const interval = setInterval(syncSellerNotifs, 8000)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncSellerNotifs()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [mode])
 
   return (
     <>
@@ -1836,75 +2530,91 @@ export default function Page() {
           onToast={showToast}
         />
       ) : mode === 'seller' ? (
-        <div className="app-shell seller-shell flex flex-col md:flex-row min-h-screen">
+        <div className="app-shell seller-shell flex flex-col md:flex-row min-h-screen bg-[#F8FAFC]">
           {/* Mobile Top Header */}
-          <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                className="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer"
-                onClick={() => setIsMobileMenuOpen(true)}
-                aria-label="Open menu"
-              >
-                <Menu size={22} />
-              </button>
-              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSellerTab('Dashboard')}>
-                <BrandLogo size="sm" showText={false} />
-                <div>
-                  <strong suppressHydrationWarning className="text-xs text-slate-900 block font-bold leading-tight truncate max-w-[140px]">
-                    {profile.shopName}
-                  </strong>
-                  <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Store
-                  </span>
+          {sellerTab !== 'Withdraw' && (
+            <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  className="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer"
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  aria-label="Open menu"
+                >
+                  <Menu size={22} />
+                </button>
+                <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSellerTab('Dashboard')}>
+                  <BrandLogo size="sm" showText={false} />
+                  <div>
+                    <strong suppressHydrationWarning className="text-xs text-slate-900 block font-bold leading-tight truncate max-w-[140px]">
+                      {profile.shopName}
+                    </strong>
+                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Store
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200/80 text-blue-700 text-xs font-bold shadow-2xs hover:bg-blue-100 transition-colors cursor-pointer"
+                  onClick={() => setSellerTab('Withdraw')}
+                  title="Click to withdraw funds"
+                >
+                  <Wallet size={12} />
+                  <span suppressHydrationWarning>${profile.balance.toFixed(2)}</span>
+                </button>
+              </div>
             </div>
+          )}
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200/80 text-blue-700 text-xs font-bold shadow-2xs hover:bg-blue-100 transition-colors cursor-pointer"
-                onClick={() => setIsBalanceModalOpen(true)}
-                title="Click to view balance details"
-              >
-                <Wallet size={12} />
-                <span suppressHydrationWarning>${profile.balance.toFixed(2)}</span>
-              </button>
-            </div>
-          </div>
+          {sellerTab !== 'Withdraw' && (
+            <SellerSidebar
+              activeTab={sellerTab}
+              onSelectTab={(tab) => {
+                setSellerTab(tab)
+                if (tab === 'Notifications') {
+                  handleMarkAllAsRead(true)
+                } else {
+                  showToast(`${tab} opened`)
+                }
+              }}
+              onSignOutClick={signOut}
+              onBalanceClick={() => setSellerTab('Withdraw')}
+              onOpenStorefront={() => setMode('shop')}
+              unreadNotificationsCount={unreadNotifCount}
+              shopName={profile.shopName}
+              ownerName={profile.ownerName}
+              balance={profile.balance}
+              guarantee={profile.guarantee}
+              isOpenOnMobile={isMobileMenuOpen}
+              onCloseMobile={() => setIsMobileMenuOpen(false)}
+            />
+          )}
 
-          <SellerSidebar
-            activeTab={sellerTab}
-            onSelectTab={(tab) => {
-              setSellerTab(tab)
-              showToast(`${tab} opened`)
-            }}
-            onSignOutClick={signOut}
-            onBalanceClick={() => setIsBalanceModalOpen(true)}
-            onOpenStorefront={() => setMode('shop')}
-            unreadNotificationsCount={unreadNotifCount}
-            shopName={profile.shopName}
-            ownerName={profile.ownerName}
-            balance={profile.balance}
-            guarantee={profile.guarantee}
-            isOpenOnMobile={isMobileMenuOpen}
-            onCloseMobile={() => setIsMobileMenuOpen(false)}
-          />
+          <main className={sellerTab === 'Withdraw' ? 'flex-1 overflow-y-auto w-full bg-[#F8FAFC]' : 'seller-main flex-1 overflow-y-auto pb-24 md:pb-12'}>
+            {/* KYC Identity Verification Banner */}
+            {sellerTab !== 'Withdraw' && (
+              <KycBanner
+                profile={profile}
+                onOpenSubmitModal={() => setIsKycModalOpen(true)}
+                onOpenViewModal={() => setIsKycViewModalOpen(true)}
+              />
+            )}
 
-          <main className="seller-main flex-1 overflow-y-auto pb-24 md:pb-12">
             {sellerTab === 'Dashboard' && (
               <DashboardView
                 profile={profile}
                 products={products}
-                orders={orders}
+                orders={currentSellerOrders}
                 onNavigate={(tab) => {
                   setSellerTab(tab)
                   showToast(`${tab} opened`)
                 }}
-                onOpenBalanceModal={() => setIsBalanceModalOpen(true)}
+                onOpenBalanceModal={() => setSellerTab('Withdraw')}
                 onOpenStorefront={() => setMode('shop')}
-                onCreateDemoOrder={handleCreateDemoOrder}
                 onToast={showToast}
               />
             )}
@@ -1913,6 +2623,8 @@ export default function Page() {
               <ProductsView
                 products={products}
                 maxSlots={500}
+                isVerified={Boolean(profile.verified)}
+                onRequireKyc={() => setIsKycModalOpen(true)}
                 onAddProduct={handleAddProduct}
                 onUpdateProduct={handleUpdateProduct}
                 onDeleteProduct={handleDeleteProduct}
@@ -1922,17 +2634,19 @@ export default function Page() {
 
             {sellerTab === 'Orders' && (
               <OrdersView
-                orders={orders}
-                onCreateDemoOrder={handleCreateDemoOrder}
+                orders={currentSellerOrders}
+                isVerified={Boolean(profile.verified)}
+                onRequireKyc={() => setIsKycModalOpen(true)}
                 onUpdateOrderStatus={handleUpdateOrderStatus}
                 onDeleteOrder={handleDeleteOrder}
+                onDeleteAllOrders={handleDeleteAllOrders}
                 onToast={showToast}
               />
             )}
 
             {sellerTab === 'Notifications' && (
               <NotificationsView
-                notifications={notifications}
+                notifications={sellerNotifications}
                 onMarkAsRead={handleMarkAsRead}
                 onMarkAllAsRead={handleMarkAllAsRead}
                 onDeleteNotification={handleDeleteNotification}
@@ -1945,54 +2659,69 @@ export default function Page() {
                 profile={profile}
                 onUpdateProfile={handleUpdateProfile}
                 onSignOut={signOut}
-                onOpenBalanceModal={() => setIsBalanceModalOpen(true)}
+                onOpenBalanceModal={() => setSellerTab('Withdraw')}
                 onToast={showToast}
+              />
+            )}
+
+            {sellerTab === 'Withdraw' && (
+              <WithdrawView
+                profile={profile}
+                onBack={() => setSellerTab('Dashboard')}
+                onUpdateProfile={handleUpdateProfile}
+                onToast={showToast}
+                onRequireKyc={() => setIsKycModalOpen(true)}
               />
             )}
           </main>
 
           {/* Mobile Bottom Navigation Bar */}
-          <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 py-1 shadow-lg flex justify-around items-center">
-            {[
-              { id: 'Dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
-              { id: 'Products' as const, label: 'Products', icon: Package },
-              { id: 'Orders' as const, label: 'Orders', icon: ShoppingBag },
-              { id: 'Notifications' as const, label: 'Notifications', icon: Bell, badge: unreadNotifCount },
-              { id: 'Profile' as const, label: 'Profile', icon: User },
-            ].map(({ id, label, icon: Icon, badge }) => {
-              const isActive = sellerTab === id
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all relative cursor-pointer min-w-[56px] ${
-                    isActive
-                      ? 'text-blue-600 font-bold'
-                      : 'text-slate-500 hover:text-slate-800 font-medium'
-                  }`}
-                  onClick={() => {
-                    setSellerTab(id)
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                  }}
-                >
-                  <div className="relative">
-                    <Icon size={20} className={isActive ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
-                    {Boolean(badge && badge > 0) && (
-                      <span className="absolute -top-1 -right-2 bg-blue-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
-                        {badge}
-                      </span>
+          {sellerTab !== 'Withdraw' && (
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 py-1 shadow-lg flex justify-around items-center">
+              {[
+                { id: 'Dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
+                { id: 'Products' as const, label: 'Products', icon: Package },
+                { id: 'Orders' as const, label: 'Orders', icon: ShoppingBag },
+                { id: 'Notifications' as const, label: 'Notifications', icon: Bell, badge: unreadNotifCount },
+                { id: 'Profile' as const, label: 'Profile', icon: User },
+              ].map(({ id, label, icon: Icon, badge }) => {
+                const isActive = sellerTab === id
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all relative cursor-pointer min-w-[56px] ${
+                      isActive
+                        ? 'text-blue-600 font-bold'
+                        : 'text-slate-500 hover:text-slate-800 font-medium'
+                    }`}
+                    onClick={() => {
+                      setSellerTab(id)
+                      if (id === 'Notifications') {
+                        handleMarkAllAsRead(true)
+                      }
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
+                  >
+                    <div className="relative">
+                      <Icon size={20} className={isActive ? 'stroke-[2.4]' : 'stroke-[1.8]'} />
+                      {Boolean(badge && badge > 0) && (
+                        <span className="absolute -top-1 -right-2 bg-blue-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                          {badge}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] mt-0.5 tracking-tight">{label}</span>
+                    {isActive && (
+                      <span className="w-1 h-1 rounded-full bg-blue-600 mt-0.5" />
                     )}
-                  </div>
-                  <span className="text-[10px] mt-0.5 tracking-tight">{label}</span>
-                  {isActive && (
-                    <span className="w-1 h-1 rounded-full bg-blue-600 mt-0.5" />
-                  )}
-                </button>
-              )
-            })}
-          </nav>
+                  </button>
+                )
+              })}
+            </nav>
+          )}
 
-          <SupportChatModal onToast={showToast} />
+          <SupportChatModal sellerProfile={profile} onToast={showToast} />
 
           <BalanceModal
             isOpen={isBalanceModalOpen}
@@ -2007,13 +2736,31 @@ export default function Page() {
           orders={orders}
           products={products}
           sellerProfile={profile}
+          sellers={sellers}
           onUpdateOrderStatus={handleUpdateOrderStatus}
           onDeleteOrder={handleDeleteOrder}
           onCreateOrder={handleCreateOrderFromShop}
-          onCreateDemoOrder={handleCreateDemoOrder}
           onToast={showToast}
           onSignOut={signOut}
-          onSwitchToSeller={() => {
+          onSwitchToSeller={(targetSeller) => {
+            if (targetSeller) {
+              setProfile(targetSeller)
+              try {
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('u_seller_active_profile', JSON.stringify(targetSeller))
+                  localStorage.setItem(
+                    'u_auth_session',
+                    JSON.stringify({
+                      role: 'seller',
+                      profile: targetSeller,
+                      email: targetSeller.email,
+                      shopName: targetSeller.shopName,
+                      ownerName: targetSeller.ownerName,
+                    })
+                  )
+                }
+              } catch {}
+            }
             setMode('seller')
             setSellerTab('Dashboard')
           }}
@@ -2026,7 +2773,45 @@ export default function Page() {
         />
       )}
 
+      {/* Seller KYC Submission Modal */}
+      <KycSubmitModal
+        isOpen={isKycModalOpen}
+        onClose={() => setIsKycModalOpen(false)}
+        profile={profile}
+        onSubmitted={(updated) => {
+          setProfile(updated)
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('u_seller_active_profile', JSON.stringify(updated))
+            }
+          } catch {}
+        }}
+        onToast={showToast}
+      />
+
+      {/* Seller KYC View/Inspect Modal */}
+      <AdminKycModal
+        isOpen={isKycViewModalOpen}
+        onClose={() => setIsKycViewModalOpen(false)}
+        seller={profile}
+        isAdmin={false}
+        onToast={showToast}
+      />
+
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
+
+      {/* Seller Real-Time / Available Notification Pop-Up Alert */}
+      {mode === 'seller' && notificationPopup && (
+        <SellerNotificationPopup
+          popup={notificationPopup}
+          onClose={() => setNotificationPopup(null)}
+          onView={() => {
+            setNotificationPopup(null)
+            setSellerTab('Notifications')
+            handleMarkAllAsRead(true)
+          }}
+        />
+      )}
     </>
   )
 }

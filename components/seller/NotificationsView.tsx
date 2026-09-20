@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Check,
   CheckCheck,
@@ -32,6 +32,13 @@ export function NotificationsView({
 }: NotificationsViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>('all')
   const [selectedNotif, setSelectedNotif] = useState<NotificationItem | null>(null)
+
+  // When notification page is visited, automatically mark all as read so the unread numbering becomes zero
+  useEffect(() => {
+    if (notifications.some((n) => !n.read)) {
+      onMarkAllAsRead()
+    }
+  }, [])
 
   const unreadCount = notifications.filter((n) => !n.read).length
   const readCount = notifications.filter((n) => n.read).length
@@ -194,7 +201,7 @@ export function NotificationsView({
             <div className="space-y-4 text-sm text-slate-600">
               <p className="font-medium text-slate-800">{selectedNotif.description}</p>
               {selectedNotif.details && (
-                <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl text-xs text-slate-600 leading-relaxed">
+                <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl text-xs text-slate-600 leading-relaxed whitespace-pre-line">
                   {selectedNotif.details}
                 </div>
               )}

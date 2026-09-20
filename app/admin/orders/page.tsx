@@ -8,13 +8,16 @@ import {
   initialSellerProfile,
   Product,
   Order,
+  NotificationItem,
   SellerProfile
 } from '@/lib/mock-data'
 import {
   fetchProducts,
   fetchOrders,
   fetchSellerProfile,
+  fetchSellerProfiles,
   createOrder,
+  createNotification,
   updateOrderStatus,
   deleteOrder,
   updateSellerProfile,
@@ -27,7 +30,7 @@ import {
   Users,
   ShieldCheck,
   ShoppingBag,
-  HeartPulse,
+  MessageSquare,
   WalletCards,
   Activity,
   FileText,
@@ -46,7 +49,7 @@ const adminNav = [
   { label: 'Sellers', icon: Users, group: 'Manage' },
   { label: 'KYC', icon: ShieldCheck, group: 'Manage' },
   { label: 'Orders', icon: ShoppingBag, group: 'Manage' },
-  { label: 'Support', icon: HeartPulse, group: 'Communication' },
+  { label: 'Support', icon: MessageSquare, group: 'Communication' },
   { label: 'Withdrawals', icon: WalletCards, group: 'Finance' },
   { label: 'Recent Actions', icon: Activity, group: 'Activity' },
   { label: 'My Logs', icon: FileText, group: 'Activity' },
@@ -57,6 +60,7 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>(initialOrders)
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [profile, setProfile] = useState<SellerProfile>(initialSellerProfile)
+  const [sellers, setSellers] = useState<SellerProfile[]>([])
   const [activeTab, setActiveTab] = useState('Orders')
   const [toast, setToast] = useState('')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -89,14 +93,16 @@ export default function AdminOrdersPage() {
     async function syncSupabase() {
       if (!isSupabaseConfigured()) return
       try {
-        const [supaOrders, supaProds, supaProfile] = await Promise.all([
+        const [supaOrders, supaProds, supaProfile, supaSellers] = await Promise.all([
           fetchOrders(),
           fetchProducts(),
           fetchSellerProfile(),
+          fetchSellerProfiles(),
         ])
         if (supaOrders) setOrders(supaOrders)
         if (supaProds) setProducts(supaProds)
         if (supaProfile) setProfile(supaProfile)
+        if (supaSellers) setSellers(supaSellers)
       } catch (err) {
         console.warn('[AdminOrders] Sync error:', err)
       }
@@ -104,26 +110,60 @@ export default function AdminOrdersPage() {
     syncSupabase()
   }, [])
 
-  const handleUpdateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
+  const handleUpdateOrderStatus = async (
+    orderId: string,
+    newStatus: Order['status'],
+    targetSellerId?: string
+  ) => {
     const order = orders.find((o) => o.id === orderId)
     if (!order) return
 
-    // If order is moved to cancelled, reverse profit from seller balance
-    if (newStatus === 'cancelled' && order.status !== 'cancelled') {
-      const profitToDeduct = Number(order.profit) || 0
-      const newBalance = Number(Math.max(0, profile.balance - profitToDeduct).toFixed(2))
-      setProfile((prev) => ({ ...prev, balance: newBalance }))
-      await updateSellerProfile({ balance: newBalance })
-    } else if (order.status === 'cancelled' && newStatus !== 'cancelled') {
-      const profitToAdd = Number(order.profit) || 0
-      const newBalance = Number((profile.balance + profitToAdd).toFixed(2))
-      setProfile((prev) => ({ ...prev, balance: newBalance }))
-      await updateSellerProfile({ balance: newBalance })
+    const oldStatus = order.status
+    if (oldStatus === newStatus) return
+
+    // Enforce stage progression: direct transition to delivered without passing stages is blocked
+    if (newStatus === 'delivered') {
+      const normStatus = oldStatus === 'unpaid' ? 'paid' : oldStatus
+      if (normStatus !== 'out_for_delivery') {
+        showToast('Order must be paid to process before it can be completed.')
+        return
+      }
+    }
+
+    // Find the target seller to credit or debit
+    const sellerToUpdate = sellers.find((s) => s.id === (targetSellerId || order.sellerId)) || profile
+    let updatedBalance = sellerToUpdate.balance
+    const profit = Number(order.profit) || 0
+
+    // Moving to delivered from non-delivered: CREDIT PROFIT TO DASHBOARD
+    if (newStatus === 'delivered' && oldStatus !== 'delivered') {
+      updatedBalance = Number((sellerToUpdate.balance + profit).toFixed(2))
+      if (sellerToUpdate.id === profile.id || !sellerToUpdate.id) {
+        setProfile((prev) => ({ ...prev, balance: updatedBalance }))
+      }
+      setSellers((prev) =>
+        prev.map((s) => (s.id === sellerToUpdate.id ? { ...s, balance: updatedBalance } : s))
+      )
+      await updateSellerProfile({ balance: updatedBalance }, sellerToUpdate.id)
+      showToast(`🎉 Order ${order.orderNumber} DELIVERED! +$${profit.toFixed(2)} profit added to dashboard`)
+    }
+    // Moving from delivered to cancelled: REVERSE PROFIT
+    else if (oldStatus === 'delivered' && newStatus === 'cancelled') {
+      updatedBalance = Number(Math.max(0, sellerToUpdate.balance - profit).toFixed(2))
+      if (sellerToUpdate.id === profile.id || !sellerToUpdate.id) {
+        setProfile((prev) => ({ ...prev, balance: updatedBalance }))
+      }
+      setSellers((prev) =>
+        prev.map((s) => (s.id === sellerToUpdate.id ? { ...s, balance: updatedBalance } : s))
+      )
+      await updateSellerProfile({ balance: updatedBalance }, sellerToUpdate.id)
+      showToast(`Order ${order.orderNumber} cancelled. Profit reversed from dashboard`)
+    } else {
+      showToast(`Order ${order.orderNumber} status updated to ${newStatus.replace(/_/g, ' ')}`)
     }
 
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)))
-    await updateOrderStatus(orderId, newStatus)
-    showToast(`Order ${order.orderNumber} status updated to ${newStatus.replace(/_/g, ' ')}`)
+    await updateOrderStatus(orderId, newStatus, sellerToUpdate.id)
   }
 
   const handleDeleteOrder = async (orderId: string) => {
@@ -132,22 +172,32 @@ export default function AdminOrdersPage() {
 
     setOrders((prev) => prev.filter((o) => o.id !== orderId))
 
-    let newBalance = profile.balance
-    if (orderToDelete.status !== 'cancelled') {
+    const targetSeller = sellers.find((s) => s.id === orderToDelete.sellerId) || profile
+    let newBalance = targetSeller.balance || 0
+    if (orderToDelete.status === 'delivered') {
       const profitToDeduct = Number(orderToDelete.profit) || 0
-      newBalance = Number(Math.max(0, profile.balance - profitToDeduct).toFixed(2))
+      newBalance = Number(Math.max(0, newBalance - profitToDeduct).toFixed(2))
     }
-    const newTotalOrders = Math.max(0, profile.totalOrders - 1)
+    const newTotalOrders = Math.max(0, (targetSeller.totalOrders || 1) - 1)
 
-    setProfile((prev) => ({
-      ...prev,
-      balance: newBalance,
-      totalOrders: newTotalOrders,
-    }))
+    if (targetSeller.id === profile.id || !targetSeller.id) {
+      setProfile((prev) => ({
+        ...prev,
+        balance: newBalance,
+        totalOrders: newTotalOrders,
+      }))
+    }
+    setSellers((prev) =>
+      prev.map((s) =>
+        s.id === targetSeller.id
+          ? { ...s, balance: newBalance, totalOrders: newTotalOrders }
+          : s
+      )
+    )
 
     await Promise.all([
       deleteOrder(orderId),
-      updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders }),
+      updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders }, targetSeller.id),
     ])
     showToast(`Order ${orderToDelete.orderNumber} removed from database`)
   }
@@ -158,18 +208,56 @@ export default function AdminOrdersPage() {
 
     setOrders((prev) => [activeOrder, ...prev.filter((o) => o.id !== activeOrder.id)])
 
+    const targetSeller = sellers.find((s) => s.id === activeOrder.sellerId) || profile
     const profitToAdd = Number(activeOrder.profit) || 0
-    const newBalance = Number((profile.balance + profitToAdd).toFixed(2))
-    const newTotalOrders = profile.totalOrders + 1
+    const newBalance = activeOrder.status === 'delivered'
+      ? Number(((targetSeller.balance || 0) + profitToAdd).toFixed(2))
+      : (targetSeller.balance || 0)
+    const newTotalOrders = (targetSeller.totalOrders || 0) + 1
 
-    setProfile((prev) => ({
-      ...prev,
-      balance: newBalance,
-      totalOrders: newTotalOrders,
-    }))
+    if (targetSeller.id === profile.id || !targetSeller.id) {
+      setProfile((prev) => ({
+        ...prev,
+        balance: newBalance,
+        totalOrders: newTotalOrders,
+      }))
+    }
+    setSellers((prev) =>
+      prev.map((s) =>
+        s.id === targetSeller.id
+          ? { ...s, balance: newBalance, totalOrders: newTotalOrders }
+          : s
+      )
+    )
+    await updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders }, targetSeller.id)
 
-    await updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders })
-    showToast(`Order ${activeOrder.orderNumber} dispatched! (+$${profitToAdd.toFixed(2)} profit)`)
+    const newNotif: NotificationItem = {
+      id: 'notif-' + Date.now(),
+      title: 'New Customer Order',
+      description: `Order ${activeOrder.orderNumber} for $${Number(activeOrder.totalAmount).toFixed(2)} assigned by Admin.`,
+      date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase(),
+      timeAgo: 'Just now',
+      refCode: activeOrder.orderNumber,
+      type: 'order',
+      read: false,
+      details: `Customer ${activeOrder.customerName} (${activeOrder.customerEmail}) order #${activeOrder.orderNumber} assigned to ${targetSeller.shopName}. Profit: $${profitToAdd.toFixed(2)}. Delivery: ${activeOrder.shippingAddress}.`,
+    }
+
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_seller_notifications')
+        const list = stored ? JSON.parse(stored) : []
+        localStorage.setItem('u_seller_notifications', JSON.stringify([newNotif, ...list]))
+        window.dispatchEvent(new CustomEvent('u_seller_notifications_update', { detail: { notification: newNotif } }))
+      }
+    } catch {}
+    createNotification(newNotif).catch(() => {})
+
+    if (activeOrder.status === 'delivered') {
+      showToast(`Order ${activeOrder.orderNumber} placed & delivered for ${targetSeller.shopName}! (+$${profitToAdd.toFixed(2)} profit)`)
+    } else {
+      showToast(`Order ${activeOrder.orderNumber} created for ${targetSeller.shopName} in Pending stage.`)
+    }
   }
 
   return (
@@ -191,16 +279,11 @@ export default function AdminOrdersPage() {
         }`}
       >
         <div className="brand flex items-center justify-between p-4 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <BrandLogo size="md" />
-            <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider">
-              Admin
-            </span>
-          </div>
+          <BrandLogo size="md" subtitle="Management Console" />
           {isMobileMenuOpen && (
             <button
               type="button"
-              className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-700"
+              className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               <X size={20} />
@@ -252,8 +335,16 @@ export default function AdminOrdersPage() {
                   }`}
                   onClick={() => {
                     setActiveTab(label)
-                    if (label === 'Sellers') {
+                    if (label === 'Dashboard') {
+                      router.push('/admin/dashboard')
+                    } else if (label === 'Sellers') {
                       router.push('/admin/sellers')
+                    } else if (label === 'KYC') {
+                      router.push('/admin/kyc')
+                    } else if (label === 'Support') {
+                      router.push('/admin/support')
+                    } else if (label === 'Recent Actions' || label === 'My Logs') {
+                      router.push(`/admin/activity?tab=${encodeURIComponent(label)}`)
                     } else if (label !== 'Orders') {
                       router.push(`/?mode=admin&tab=${label}`)
                     }
@@ -312,6 +403,7 @@ export default function AdminOrdersPage() {
             orders={orders}
             products={products}
             sellerProfile={profile}
+            sellers={sellers}
             onUpdateOrderStatus={handleUpdateOrderStatus}
             onDeleteOrder={handleDeleteOrder}
             onCreateOrder={handleCreateOrder}

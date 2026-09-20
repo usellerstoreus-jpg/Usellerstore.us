@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   ShoppingBag,
   Search,
@@ -33,6 +33,8 @@ import {
   MapPin,
   User,
   XCircle,
+  MoreVertical,
+  CheckCircle2,
 } from 'lucide-react'
 import { Product, Order, SellerProfile, shopCategories } from '@/lib/mock-data'
 
@@ -40,11 +42,88 @@ export interface AdminOrdersViewProps {
   orders: Order[]
   products: Product[]
   sellerProfile: SellerProfile
-  onUpdateOrderStatus: (orderId: string, newStatus: Order['status']) => void
+  sellers?: SellerProfile[]
+  onUpdateOrderStatus: (orderId: string, newStatus: Order['status'], sellerId?: string) => void
   onDeleteOrder: (orderId: string) => void
   onCreateOrder: (newOrder: Order) => Promise<void> | void
   onToast: (message: string) => void
   onSwitchToSeller?: () => void
+}
+
+export const DELIVERY_STAGES: { id: Order['status']; label: string; dotColor: string }[] = [
+  { id: 'paid', label: 'Pending', dotColor: 'bg-amber-500' },
+  { id: 'pickup', label: 'Pickup', dotColor: 'bg-orange-500' },
+  { id: 'on_the_way', label: 'On The Way', dotColor: 'bg-indigo-500' },
+  { id: 'out_for_delivery', label: 'Out For Delivery', dotColor: 'bg-cyan-500' },
+  { id: 'delivered', label: 'Delivered', dotColor: 'bg-emerald-500' },
+]
+
+export const STATUS_DROPDOWN_MENU: { id: Order['status']; label: string; isDanger?: boolean }[] = [
+  { id: 'cancelled', label: 'Cancelled', isDanger: true },
+  { id: 'paid', label: 'Pending' },
+  { id: 'pickup', label: 'Pickup' },
+  { id: 'on_the_way', label: 'On The Way' },
+  { id: 'out_for_delivery', label: 'Out For Delivery' },
+  { id: 'delivered', label: 'Delivered' },
+]
+
+export function getStatusLabel(status: Order['status']) {
+  switch (status) {
+    case 'paid':
+    case 'unpaid':
+      return 'Pending'
+    case 'pickup':
+      return 'Pickup'
+    case 'on_the_way':
+      return 'On The Way'
+    case 'out_for_delivery':
+      return 'Out For Delivery'
+    case 'delivered':
+      return 'Delivered'
+    case 'cancelled':
+      return 'Cancelled'
+    default:
+      return status
+  }
+}
+
+export function getStatusBadgeStyles(status: Order['status']) {
+  switch (status) {
+    case 'delivered':
+      return 'bg-[#D1FAE5] text-[#047857] border-[#A7F3D0] hover:bg-emerald-100'
+    case 'paid':
+    case 'unpaid':
+      return 'bg-[#FEF3C7] text-[#D97706] border-[#FDE68A] hover:bg-amber-100'
+    case 'pickup':
+      return 'bg-[#FFEDD5] text-[#C2410C] border-[#FED7AA] hover:bg-orange-100'
+    case 'on_the_way':
+      return 'bg-[#E0E7FF] text-[#4338CA] border-[#C7D2FE] hover:bg-indigo-100'
+    case 'out_for_delivery':
+      return 'bg-[#CFFAFE] text-[#0E7490] border-[#A5F3FC] hover:bg-cyan-100'
+    case 'cancelled':
+      return 'bg-[#FFE4E6] text-[#E11D48] border-[#FECDD3] hover:bg-rose-100'
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+  }
+}
+
+export function getNextDeliveryStage(currentStatus: Order['status']) {
+  const normStatus = currentStatus === 'unpaid' ? 'paid' : currentStatus
+  const idx = DELIVERY_STAGES.findIndex((s) => s.id === normStatus)
+  if (idx >= 0 && idx < DELIVERY_STAGES.length - 1) {
+    return DELIVERY_STAGES[idx + 1]
+  }
+  return null
+}
+
+export interface AutoProgressItem {
+  orderId: string
+  orderNumber: string
+  targetSellerId: string
+  currentStageIndex: number
+  intervalSeconds: number
+  nextTransitionTimestamp: number
+  profit: number
 }
 
 interface SelectedItem {
@@ -78,14 +157,15 @@ export function AdminOrdersView({
   orders,
   products,
   sellerProfile,
+  sellers = [],
   onUpdateOrderStatus,
   onDeleteOrder,
   onCreateOrder,
   onToast,
   onSwitchToSeller,
 }: AdminOrdersViewProps) {
-  // Orders View & Selection state - default to 'tester' matching Screenshot 1
-  const [selectedSellerId, setSelectedSellerId] = useState<string | null>('tester')
+  // Orders View & Selection state
+  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null)
   const [sellerSearch, setSellerSearch] = useState('')
   const [orderSearch, setOrderSearch] = useState('')
   const [copiedSeller, setCopiedSeller] = useState(false)
@@ -112,7 +192,7 @@ export function AdminOrdersView({
   // -------------------------------------------------------------
   const [isGiveOrderActive, setIsGiveOrderActive] = useState(false)
   const [giveStep, setGiveStep] = useState<1 | 2 | 3 | 4>(2)
-  const [targetSellerId, setTargetSellerId] = useState('tester')
+  const [targetSellerId, setTargetSellerId] = useState<string>('')
 
   // Step 2: Selected Products & Filter
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
@@ -129,67 +209,181 @@ export function AdminOrdersView({
   const [postalCode, setPostalCode] = useState('')
   const [country, setCountry] = useState('United States')
   const [creationTiming, setCreationTiming] = useState<'instant' | 'scheduled'>('instant')
+  const [deliveryMode, setDeliveryMode] = useState<'auto' | 'manual'>('auto')
+  const [autoProgressionSpeed, setAutoProgressionSpeed] = useState<number>(10)
+  const [autoProgressQueue, setAutoProgressQueue] = useState<AutoProgressItem[]>([])
+  const [openStatusDropdownId, setOpenStatusDropdownId] = useState<string | null>(null)
+  const [openActionsOrderId, setOpenActionsOrderId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [stageWarningError, setStageWarningError] = useState<string | null>(null)
 
-  // Random USA Customer Presets
-  const randomUSAPresets = [
-    {
-      name: 'Usellerstore',
-      phone: '28288282',
-      address1: 'KCXASCJAI, FWEUFH',
-      address2: 'EFUWEF',
-      city: 'DIQWDJ',
-      state: 'WDJI',
-      zip: '10001',
-    },
-    {
-      name: 'Alexander Wright',
-      phone: '+1 (555) 749-1823',
-      address1: '750 Park Avenue',
-      address2: 'Apt 14B',
-      city: 'New York',
-      state: 'NY',
-      zip: '10021',
-    },
-    {
-      name: 'Sarah Jenkins',
-      phone: '+1 (555) 382-9102',
-      address1: '742 Evergreen Terrace',
-      address2: '',
-      city: 'Springfield',
-      state: 'OR',
-      zip: '97477',
-    },
-  ]
+  // Auto-dismiss stage warning error toast after 5 seconds
+  useEffect(() => {
+    if (!stageWarningError) return
+    const timer = setTimeout(() => {
+      setStageWarningError(null)
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [stageWarningError])
 
-  const handleApplyRandomUSA = () => {
-    const randomPick = randomUSAPresets[Math.floor(Math.random() * randomUSAPresets.length)]
-    setFullName(randomPick.name)
-    setPhone(randomPick.phone)
-    setAddress1(randomPick.address1)
-    setAddress2(randomPick.address2)
-    setCity(randomPick.city)
-    setStateName(randomPick.state)
-    setPostalCode(randomPick.zip)
-    setCountry('United States')
-    onToast(`Applied customer: ${randomPick.name}`)
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.status-dropdown-container') && !target.closest('.actions-dropdown-container')) {
+        setOpenStatusDropdownId(null)
+        setOpenActionsOrderId(null)
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
+
+  // Load auto-progress queue from localStorage
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_auto_delivery_queue')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) setAutoProgressQueue(parsed)
+        }
+      }
+    } catch {}
+  }, [])
+
+  // Step-by-Step Delivery Progression runner:
+  // Automatically completes stages from top to delivered: Pending -> Pickup -> On The Way -> Out For Delivery -> Delivered
+  useEffect(() => {
+    if (autoProgressQueue.length === 0) return
+
+    const timer = setInterval(() => {
+      const now = Date.now()
+      let updatedQueue = [...autoProgressQueue]
+      let changed = false
+
+      for (let i = 0; i < updatedQueue.length; i++) {
+        const item = updatedQueue[i]
+        if (now >= item.nextTransitionTimestamp) {
+          const nextIndex = item.currentStageIndex + 1
+          if (nextIndex < DELIVERY_STAGES.length) {
+            const nextStage = DELIVERY_STAGES[nextIndex]
+            onUpdateOrderStatus(item.orderId, nextStage.id, item.targetSellerId)
+
+            if (nextStage.id === 'delivered') {
+              onToast(`🎉 Order ${item.orderNumber} DELIVERED! +$${item.profit.toFixed(2)} profit added to dashboard!`)
+              updatedQueue.splice(i, 1)
+              i--
+              changed = true
+            } else {
+              onToast(`🚚 Order ${item.orderNumber} advanced to ${nextStage.label}`)
+              item.currentStageIndex = nextIndex
+              item.nextTransitionTimestamp = now + item.intervalSeconds * 1000
+              changed = true
+            }
+          } else {
+            updatedQueue.splice(i, 1)
+            i--
+            changed = true
+          }
+        }
+      }
+
+      if (changed) {
+        setAutoProgressQueue(updatedQueue)
+        try {
+          localStorage.setItem('u_auto_delivery_queue', JSON.stringify(updatedQueue))
+        } catch {}
+      }
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [autoProgressQueue, onUpdateOrderStatus, onToast])
+
+  const handleStatusChange = (orderId: string, newStatus: Order['status'], sellerId?: string) => {
+    setOpenStatusDropdownId(null)
+    setOpenActionsOrderId(null)
+
+    const targetOrder = orders.find((o) => o.id === orderId)
+    if (!targetOrder) return
+
+    // CHECK: Shifting direct to delivered without passing through previous stages
+    if (newStatus === 'delivered') {
+      const normStatus = targetOrder.status === 'unpaid' ? 'paid' : targetOrder.status
+      if (normStatus !== 'out_for_delivery') {
+        // Display exact error message from user specification & screenshot
+        setStageWarningError('Order must be paid to process before it can be completed.')
+        return
+      }
+    }
+
+    // Remove from auto progression if manually adjusted
+    setAutoProgressQueue((prev) => {
+      const filtered = prev.filter((p) => p.orderId !== orderId)
+      try {
+        localStorage.setItem('u_auto_delivery_queue', JSON.stringify(filtered))
+      } catch {}
+      return filtered
+    })
+
+    const targetSeller = sellerId || selectedSellerId || ''
+    onUpdateOrderStatus(orderId, newStatus, targetSeller)
   }
+
+
+
 
   // Active merchants list
   const sellersList = useMemo(() => {
-    const testerSeller = {
-      id: 'tester',
-      shopName: sellerProfile.shopName || 'tester',
-      ownerName: sellerProfile.ownerName || 'Zain',
-      avatarLetter: sellerProfile.avatarLetter || 'Z',
-      totalOrders: orders.length,
-      pendingOrders: orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled').length,
-      deliveredOrders: orders.filter((o) => o.status === 'delivered').length,
-      balance: sellerProfile.balance || 0,
+    if (sellers && sellers.length > 0) {
+      return sellers.map((s) => {
+        const sellerId = s.id || s.email || s.shopName
+        const forThisSeller = orders.filter((o) => {
+          if (o.sellerId) {
+            return o.sellerId === sellerId || o.sellerId === s.id || o.sellerId === s.email
+          }
+          // Legacy fallback: associate with the first seller if no sellerId
+          return s.id === sellers[0]?.id
+        })
+        return {
+          id: sellerId,
+          shopName: s.shopName || 'Store',
+          ownerName: s.ownerName || 'Merchant',
+          avatarLetter: s.avatarLetter || s.shopName?.[0]?.toUpperCase() || 'S',
+          totalOrders: forThisSeller.length,
+          pendingOrders: forThisSeller.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled').length,
+          deliveredOrders: forThisSeller.filter((o) => o.status === 'delivered').length,
+          balance: s.balance || 0,
+        }
+      })
     }
+    if (sellerProfile && sellerProfile.shopName) {
+      const sellerId = sellerProfile.id || sellerProfile.email || 'active-seller'
+      const forThisSeller = orders.filter((o) => !o.sellerId || o.sellerId === sellerId)
+      return [{
+        id: sellerId,
+        shopName: sellerProfile.shopName,
+        ownerName: sellerProfile.ownerName || 'Merchant',
+        avatarLetter: sellerProfile.avatarLetter || sellerProfile.shopName?.[0]?.toUpperCase() || 'S',
+        totalOrders: forThisSeller.length,
+        pendingOrders: forThisSeller.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled').length,
+        deliveredOrders: forThisSeller.filter((o) => o.status === 'delivered').length,
+        balance: sellerProfile.balance || 0,
+      }]
+    }
+    return []
+  }, [orders, sellerProfile, sellers])
 
-    return [testerSeller]
-  }, [orders, sellerProfile])
+  // Automatically select the first merchant if none is selected or if selected is not in list
+  useEffect(() => {
+    if (sellersList.length > 0) {
+      const exists = sellersList.some((s) => s.id === selectedSellerId)
+      if (!selectedSellerId || !exists) {
+        setSelectedSellerId(sellersList[0].id)
+        setTargetSellerId(sellersList[0].id)
+      }
+    }
+  }, [selectedSellerId, sellersList])
 
   const filteredSellers = useMemo(() => {
     if (!sellerSearch.trim()) return sellersList
@@ -206,6 +400,23 @@ export function AdminOrdersView({
   // Filtered orders for selected seller
   const sellerOrders = useMemo(() => {
     let result = orders
+
+    const currentId = selectedSeller?.id || selectedSellerId
+    // Strictly filter orders by selected seller
+    if (currentId) {
+      result = result.filter((o) => {
+        if (o.sellerId) {
+          return (
+            o.sellerId === currentId ||
+            (selectedSeller && (o.sellerId === selectedSeller.shopName || o.sellerId === selectedSeller.ownerName))
+          )
+        }
+        // Legacy fallback: if an order has no sellerId, associate it with the first seller
+        const defaultSellerId = sellersList[0]?.id
+        return currentId === defaultSellerId
+      })
+    }
+
     if (orderSearch.trim()) {
       const q = orderSearch.toLowerCase()
       result = result.filter(
@@ -216,7 +427,7 @@ export function AdminOrdersView({
       )
     }
     return result
-  }, [orders, orderSearch])
+  }, [orders, selectedSellerId, sellersList, sellerProfile, orderSearch])
 
   // Products filtering for Step 2
   const filteredProducts = useMemo(() => {
@@ -284,11 +495,14 @@ export function AdminOrdersView({
       const randomHex = Math.random().toString(16).substring(2, 10)
       const orderNumber = `#${randomHex}`
 
+      const resolvedSellerId = targetSellerId || selectedSellerId || sellersList[0]?.id || ''
+
       const formattedItems = selectedItems.map((item) => ({
         productTitle: item.product.title,
         quantity: item.quantity,
         price: item.product.sell,
         image: item.product.image,
+        sellerId: resolvedSellerId,
       }))
 
       const now = new Date()
@@ -307,18 +521,45 @@ export function AdminOrdersView({
         customerEmail: phone || '28288282',
         shippingAddress: fullShipping,
         date: dateString,
-        status: 'paid', // Displays as Pending
+        status: 'paid', // All orders start in Pending
         totalAmount: selectedItems[0]?.product.cost || 14.64,
         profit: calculatedTotals.profit,
         items: formattedItems,
+        sellerId: resolvedSellerId,
       }
 
       await onCreateOrder(newOrder)
-      setSelectedSellerId('tester')
+
+      if (deliveryMode === 'auto') {
+        const item: AutoProgressItem = {
+          orderId: newOrder.id,
+          orderNumber: newOrder.orderNumber,
+          targetSellerId: resolvedSellerId,
+          currentStageIndex: 0,
+          intervalSeconds: autoProgressionSpeed,
+          nextTransitionTimestamp: Date.now() + autoProgressionSpeed * 1000,
+          profit: calculatedTotals.profit,
+        }
+        setAutoProgressQueue((prev) => {
+          const next = [...prev, item]
+          try {
+            localStorage.setItem('u_auto_delivery_queue', JSON.stringify(next))
+          } catch {}
+          return next
+        })
+        onToast(`Order ${orderNumber} created! Auto-delivery progressing step-by-step to Delivered.`)
+      } else {
+        onToast(`Order ${orderNumber} created in Pending stage! Profit will be credited when Delivered.`)
+      }
+
+      if (targetSellerId) {
+        setSelectedSellerId(targetSellerId)
+      } else if (sellersList[0]?.id) {
+        setSelectedSellerId(sellersList[0].id)
+      }
       setExpandedOrderId(newOrder.id)
       setIsGiveOrderActive(false)
       setSelectedItems([])
-      onToast(`Order ${orderNumber} created for seller!`)
     } catch (err: any) {
       onToast(`Failed to create order: ${err.message || 'Unknown error'}`)
     } finally {
@@ -343,6 +584,34 @@ export function AdminOrdersView({
 
   return (
     <div className="admin-orders-container space-y-6">
+      {/* Exact Red Error Toast matching user screenshot */}
+      {stageWarningError && (
+        <div id="stage-warning-toast" className="fixed top-5 right-6 z-[9999] animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="relative bg-[#FFF1F2] border border-[#FECDD3] rounded-2xl px-4 py-3 shadow-xl max-w-sm flex items-center gap-3">
+            {/* Top-left circular close button */}
+            <button
+              type="button"
+              id="dismiss-stage-warning-btn"
+              onClick={() => setStageWarningError(null)}
+              className="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-[#FFE4E6] border border-[#FECDD3] text-[#E11D48] flex items-center justify-center hover:bg-rose-200 cursor-pointer shadow-xs transition-colors"
+              title="Dismiss"
+            >
+              <X size={11} strokeWidth={2.5} />
+            </button>
+
+            {/* Red filled circle with white exclamation point */}
+            <div className="w-5 h-5 rounded-full bg-[#E11D48] text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+              !
+            </div>
+
+            {/* Error Message Text */}
+            <p className="text-xs font-semibold text-[#DC2626] leading-snug m-0 select-none">
+              {stageWarningError}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 1. Header Bar matching Screenshots 1 & 3 */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         {/* Left: Orders Title with Blue Accent Bar */}
@@ -403,6 +672,9 @@ export function AdminOrdersView({
               } else {
                 setIsGiveOrderActive(true)
                 setIsSchedulesViewActive(false)
+                if (selectedSellerId) {
+                  setTargetSellerId(selectedSellerId)
+                }
                 setGiveStep(2)
                 if (selectedItems.length === 0 && products[0]) {
                   setSelectedItems([{ product: products[0], quantity: 1 }])
@@ -555,7 +827,7 @@ export function AdminOrdersView({
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500 font-medium">Selected Merchant:</span>
                   <span className="text-xs text-slate-900 font-bold">
-                    {sellersList.find((s) => s.id === targetSellerId)?.shopName || 'tester (Zain)'}
+                    {sellersList.find((s) => s.id === targetSellerId)?.shopName || sellersList[0]?.shopName || 'Select Merchant'}
                   </span>
                 </div>
                 <button
@@ -836,16 +1108,8 @@ export function AdminOrdersView({
             <div className="space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <p className="text-xs text-slate-500 m-0">
-                  Enter customer info or use a random USA customer to test.
+                  Enter the customer contact information and shipping destination.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleApplyRandomUSA}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50 text-xs font-bold shadow-2xs transition-colors cursor-pointer shrink-0"
-                >
-                  <Sparkles size={14} className="text-indigo-600" />
-                  <span>Random USA</span>
-                </button>
               </div>
 
               {/* Form Fields */}
@@ -974,6 +1238,99 @@ export function AdminOrdersView({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* DELIVERY PROGRESSION */}
+              <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                  <span>DELIVERY PROGRESSION</span>
+                  <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                    Step-by-step to Delivered
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    onClick={() => setDeliveryMode('auto')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
+                      deliveryMode === 'auto'
+                        ? 'border-indigo-600 bg-indigo-50/20 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-600 grid place-items-center shrink-0 mt-0.5">
+                      <Zap size={16} />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 flex items-center gap-1.5 flex-wrap">
+                        <span>Auto Step-by-Step</span>
+                        <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                          Recommended
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Advances sequentially: Pending ➔ Pickup ➔ On The Way ➔ Out For Delivery ➔ Delivered.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setDeliveryMode('manual')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
+                      deliveryMode === 'manual'
+                        ? 'border-indigo-600 bg-indigo-50/20 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 grid place-items-center shrink-0 mt-0.5">
+                      <Truck size={16} />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-slate-900">Manual Progression</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Starts in Pending. Order must be processed through stages before it can be completed.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {deliveryMode === 'auto' && (
+                  <div className="flex items-center gap-2 pt-1.5 pl-1 flex-wrap">
+                    <span className="text-[11px] font-bold text-slate-500">Stage speed:</span>
+                    <button
+                      type="button"
+                      onClick={() => setAutoProgressionSpeed(10)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+                        autoProgressionSpeed === 10
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Demo (10s/stage)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAutoProgressionSpeed(30)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+                        autoProgressionSpeed === 30
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Standard (30s/stage)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAutoProgressionSpeed(60)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+                        autoProgressionSpeed === 60
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      1 Min/stage
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Bottom Action Bar: Sticky Frosted Bar */}
@@ -1134,14 +1491,16 @@ export function AdminOrdersView({
           {/* Left Column: Sellers List (4 cols) */}
           <div className="lg:col-span-5 xl:col-span-4 space-y-2.5">
             {/* Top Store Badge */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
-              <Store size={13} className="text-slate-500" />
-              <span>tester</span>
-            </div>
+            {selectedSeller?.shopName && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
+                <Store size={13} className="text-slate-500" />
+                <span>{selectedSeller.shopName}</span>
+              </div>
+            )}
 
             {/* Seller Cards */}
             {filteredSellers.map((seller) => {
-              const isSelected = selectedSellerId === seller.id
+              const isSelected = selectedSellerId ? selectedSellerId === seller.id : selectedSeller?.id === seller.id
               return (
                 <div
                   key={seller.id}
@@ -1212,7 +1571,7 @@ export function AdminOrdersView({
             <div className="flex items-center justify-between">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
                 <Store size={13} className="text-slate-500" />
-                <span>{selectedSeller?.shopName || 'tester'}</span>
+                <span>{selectedSeller?.shopName || 'Orders'}</span>
               </div>
 
               <button
@@ -1234,18 +1593,21 @@ export function AdminOrdersView({
                 <Package size={36} className="mx-auto text-slate-300" />
                 <h3 className="font-bold text-sm text-slate-800">No orders yet</h3>
                 <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                  Click &quot;+ Give Order&quot; above to dispatch an order to {selectedSeller?.shopName || 'tester'}.
+                  Click &quot;+ Give Order&quot; above to dispatch an order to {selectedSeller?.shopName || 'a seller'}.
                 </p>
                 <button
                   type="button"
                   className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#5443ED] text-white text-xs font-bold shadow-xs hover:bg-[#4332D6] transition-colors cursor-pointer"
                   onClick={() => {
+                    if (selectedSellerId) {
+                      setTargetSellerId(selectedSellerId)
+                    }
                     setIsGiveOrderActive(true)
                     setGiveStep(2)
                   }}
                 >
                   <Plus size={14} />
-                  <span>Give Order to {selectedSeller?.shopName || 'tester'}</span>
+                  <span>Give Order to {selectedSeller?.shopName || 'Seller'}</span>
                 </button>
               </div>
             ) : (
@@ -1254,11 +1616,14 @@ export function AdminOrdersView({
                   const isExpanded = expandedOrderId === order.id
                   const isChecked = checkedOrderIds.includes(order.id)
                   const primaryItem = order.items[0]
+                  const hasOpenMenu = openStatusDropdownId === order.id || openActionsOrderId === order.id
 
                   return (
                     <div
                       key={order.id}
-                      className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs hover:border-slate-300 transition-all"
+                      className={`bg-white border border-slate-200/90 rounded-2xl shadow-xs hover:border-slate-300 transition-all relative ${
+                        hasOpenMenu ? 'z-30' : 'z-10'
+                      }`}
                     >
                       {/* Accordion Header Row matching Screenshot 1 */}
                       <div
@@ -1320,10 +1685,161 @@ export function AdminOrdersView({
                             </div>
                           </div>
 
-                          {/* Pending Badge */}
-                          <span className="bg-[#FEF3C7] text-[#D97706] font-semibold text-xs px-2.5 py-0.5 rounded-full capitalize">
-                            {order.status === 'paid' ? 'Pending' : order.status.replace(/_/g, ' ')}
-                          </span>
+                          {/* Status Dropdown matching User Screenshot */}
+                          <div className="relative status-dropdown-container">
+                            <button
+                              type="button"
+                              id={`status-dropdown-btn-${order.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setOpenStatusDropdownId(openStatusDropdownId === order.id ? null : order.id)
+                                setOpenActionsOrderId(null)
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all border shadow-2xs ${getStatusBadgeStyles(
+                                order.status
+                              )}`}
+                            >
+                              <span>{getStatusLabel(order.status)}</span>
+                              <ChevronDown size={13} className="opacity-70" />
+                            </button>
+
+                            {/* Dropdown Menu Popover matching Screenshot */}
+                            {openStatusDropdownId === order.id && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute right-0 top-full mt-1.5 w-44 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left"
+                              >
+                                <div className="px-3.5 py-1 text-[11px] font-semibold text-slate-400 select-none">
+                                  Change status
+                                </div>
+                                {STATUS_DROPDOWN_MENU.map((item) => {
+                                  const isSelected =
+                                    order.status === item.id ||
+                                    (item.id === 'paid' && order.status === 'unpaid')
+
+                                  return (
+                                    <button
+                                      key={item.id}
+                                      id={`status-option-${item.id}`}
+                                      type="button"
+                                      onClick={() =>
+                                        handleStatusChange(
+                                          order.id,
+                                          item.id,
+                                          order.sellerId || selectedSellerId || ''
+                                        )
+                                      }
+                                      className={`w-full text-left px-3.5 py-1.5 text-xs transition-colors flex items-center justify-between cursor-pointer ${
+                                        item.isDanger
+                                          ? 'text-rose-600 hover:bg-rose-50 font-semibold'
+                                          : 'text-slate-700 hover:bg-slate-50 font-medium'
+                                      }`}
+                                    >
+                                      <span>{item.label}</span>
+                                      {isSelected && (
+                                        <Check
+                                          size={13}
+                                          strokeWidth={2.5}
+                                          className={item.isDanger ? 'text-rose-600' : 'text-emerald-600'}
+                                        />
+                                      )}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Three-Dots Menu matching Screenshot */}
+                          <div className="relative actions-dropdown-container">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setOpenActionsOrderId(openActionsOrderId === order.id ? null : order.id)
+                                setOpenStatusDropdownId(null)
+                              }}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
+                              title="Order options"
+                            >
+                              <MoreVertical size={14} />
+                            </button>
+
+                            {openActionsOrderId === order.id && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-left"
+                              >
+                                {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                                  <>
+                                    {order.status === 'out_for_delivery' ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          handleStatusChange(
+                                            order.id,
+                                            'delivered',
+                                            order.sellerId || selectedSellerId || ''
+                                          )
+                                        }}
+                                        className="w-full text-left px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50/40 hover:bg-emerald-100/70 flex items-center justify-between cursor-pointer transition-colors"
+                                      >
+                                        <div className="flex items-center gap-1.5">
+                                          <CheckCircle2 size={13} className="text-emerald-600" />
+                                          <span>Complete Order (Delivered)</span>
+                                        </div>
+                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md">
+                                          +${Number(order.profit).toFixed(2)}
+                                        </span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const nextStage = getNextDeliveryStage(order.status)
+                                          if (nextStage) {
+                                            handleStatusChange(
+                                              order.id,
+                                              nextStage.id,
+                                              order.sellerId || selectedSellerId || ''
+                                            )
+                                          }
+                                        }}
+                                        className="w-full text-left px-3.5 py-2 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 flex items-center justify-between cursor-pointer"
+                                      >
+                                        <span>Advance: {getNextDeliveryStage(order.status)?.label || 'Next Stage'}</span>
+                                        <ArrowRight size={13} />
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setInspectOrder(order)
+                                    setOpenActionsOrderId(null)
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Package size={13} className="text-slate-400" />
+                                  <span>Inspect Order Details</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionsOrderId(null)
+                                    onDeleteOrder(order.id)
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer border-t border-slate-100 mt-1"
+                                >
+                                  <Trash2 size={13} className="text-rose-500" />
+                                  <span>Delete Order</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
 
                           {/* Chevron Toggle Button */}
                           <button
@@ -1338,6 +1854,95 @@ export function AdminOrdersView({
                           </button>
                         </div>
                       </div>
+
+                      {/* Step-by-Step Delivery Stage Progression Bar for active orders */}
+                      {order.status !== 'cancelled' && (
+                        <div className="px-4 py-2 bg-slate-50/60 border-t border-slate-100/80 flex items-center justify-between gap-2 overflow-x-auto text-[11px]">
+                          <div className="flex items-center gap-1 sm:gap-2">
+                            {DELIVERY_STAGES.map((st, sIdx) => {
+                              const normStatus = order.status === 'unpaid' ? 'paid' : order.status
+                              const currentIdx = DELIVERY_STAGES.findIndex((s) => s.id === normStatus)
+                              const isCurrent = st.id === normStatus
+                              const isCompleted = currentIdx > sIdx
+
+                              return (
+                                <React.Fragment key={st.id}>
+                                  {sIdx > 0 && (
+                                    <div
+                                      className={`w-3 sm:w-5 h-0.5 ${
+                                        isCompleted ? 'bg-emerald-400' : 'bg-slate-200'
+                                      }`}
+                                    />
+                                  )}
+                                  <button
+                                    type="button"
+                                    id={`admin-stage-${st.id}-${order.id}`}
+                                    onClick={() =>
+                                      handleStatusChange(
+                                        order.id,
+                                        st.id,
+                                        order.sellerId || selectedSellerId || ''
+                                      )
+                                    }
+                                    title={`Click to set stage to ${st.label}`}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold transition-all cursor-pointer ${
+                                      isCurrent
+                                        ? 'bg-indigo-600 text-white shadow-2xs ring-2 ring-indigo-500/20 font-bold'
+                                        : isCompleted
+                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                        : 'bg-white border border-slate-200 text-slate-400 hover:text-slate-600'
+                                    }`}
+                                  >
+                                    {isCompleted ? (
+                                      <Check size={10} strokeWidth={3} />
+                                    ) : (
+                                      <span
+                                        className={`w-1.5 h-1.5 rounded-full ${
+                                          isCurrent ? 'bg-white' : 'bg-slate-300'
+                                        }`}
+                                      />
+                                    )}
+                                    <span>{st.label}</span>
+                                  </button>
+                                </React.Fragment>
+                              )
+                            })}
+                          </div>
+
+                          {/* Quick Advance / Live auto status */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {autoProgressQueue.some((q) => q.orderId === order.id) ? (
+                              <span className="inline-flex items-center gap-1 text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
+                                <span>Auto-delivering…</span>
+                              </span>
+                            ) : order.status !== 'delivered' ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nxt = getNextDeliveryStage(order.status)
+                                  if (nxt) {
+                                    handleStatusChange(
+                                      order.id,
+                                      nxt.id,
+                                      order.sellerId || selectedSellerId || ''
+                                    )
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 text-xs font-bold text-[#5443ED] hover:text-[#4332D6] cursor-pointer"
+                              >
+                                <span>Next: {getNextDeliveryStage(order.status)?.label}</span>
+                                <ArrowRight size={12} />
+                              </button>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
+                                <CheckCircle2 size={12} />
+                                <span>Profit Credited to Dashboard</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Expanded Product Items matching Screenshot 1 */}
                       {isExpanded && (
@@ -1501,7 +2106,13 @@ export function AdminOrdersView({
                       }}
                       className="p-2 bg-white rounded-xl border border-slate-200 text-left hover:border-indigo-500 transition-colors flex items-center gap-2 cursor-pointer"
                     >
-                      <img src={prod.image} alt={prod.title} className="w-8 h-8 rounded-lg object-cover" />
+                      {prod.image && prod.image.trim() ? (
+                        <img src={prod.image} alt={prod.title} className="w-8 h-8 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-slate-300">
+                          <Package size={14} />
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <div className="text-[11px] font-bold text-slate-900 truncate">{prod.title}</div>
                         <div className="text-[10px] text-slate-500">${prod.sell.toFixed(2)}</div>
@@ -1559,7 +2170,7 @@ export function AdminOrdersView({
 
             {/* Seller Line */}
             <div className="text-xs text-slate-500">
-              Seller <b className="text-slate-900 ml-1">tester</b>
+              Seller <b className="text-slate-900 ml-1">{selectedSeller?.shopName || 'Merchant'}</b>
             </div>
 
             {/* 5 Metric Cards Grid matching Screenshot 2 */}

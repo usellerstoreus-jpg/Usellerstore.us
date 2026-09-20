@@ -13,8 +13,8 @@ import {
 import { BrandLogo } from '@/components/ui/BrandLogo'
 
 export interface SellerSidebarProps {
-  activeTab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile'
-  onSelectTab: (tab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile') => void
+  activeTab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile' | 'Withdraw'
+  onSelectTab: (tab: 'Dashboard' | 'Products' | 'Orders' | 'Notifications' | 'Profile' | 'Withdraw') => void
   onSignOutClick: () => void
   onBalanceClick: () => void
   onOpenStorefront?: () => void
@@ -48,7 +48,7 @@ export function SellerSidebar({
   }, [])
 
   const navItems = [
-    { id: 'Dashboard' as const, label: 'Dashbord', icon: LayoutDashboard },
+    { id: 'Dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'Products' as const, label: 'Products', icon: Box },
     { id: 'Orders' as const, label: 'Orders', icon: CheckSquare },
     { id: 'Notifications' as const, label: 'Notifications', icon: Bell, badge: unreadNotificationsCount },

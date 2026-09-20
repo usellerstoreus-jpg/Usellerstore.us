@@ -29,10 +29,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate mime type
-    if (!file.type.startsWith('image/')) {
+    const bucketParam = (formData.get('bucket') as string) || 'product-images'
+    const bucketName = bucketParam === 'kyc-documents' ? 'kyc-documents' : 'product-images'
+
+    // Validate mime type: allow images, and also PDFs for kyc-documents
+    const isImage = file.type.startsWith('image/')
+    const isPdf = file.type === 'application/pdf'
+    if (!isImage && !(bucketName === 'kyc-documents' && isPdf)) {
       return NextResponse.json(
-        { error: 'Uploaded file must be an image (jpg, png, webp, etc.)' },
+        { error: 'Uploaded file must be an image (jpg, png, webp) or PDF document' },
         { status: 400 }
       )
     }
@@ -40,7 +45,7 @@ export async function POST(request: NextRequest) {
     // Max 10MB
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json(
-        { error: 'Image file size must be less than 10MB' },
+        { error: 'File size must be less than 10MB' },
         { status: 400 }
       )
     }
@@ -50,7 +55,6 @@ export async function POST(request: NextRequest) {
     })
 
     // Ensure bucket exists
-    const bucketName = 'product-images'
     try {
       await supabase.storage.createBucket(bucketName, { public: true })
     } catch {
@@ -59,8 +63,10 @@ export async function POST(request: NextRequest) {
 
     // Sanitize extension and generate unique file name
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const cleanExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext) ? ext : 'jpg'
-    const uniqueName = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${cleanExt}`
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'pdf']
+    const cleanExt = allowedExts.includes(ext) ? ext : (isPdf ? 'pdf' : 'jpg')
+    const prefix = bucketName === 'kyc-documents' ? 'kyc' : 'prod'
+    const uniqueName = `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${cleanExt}`
 
     // Convert file to ArrayBuffer / Buffer
     const arrayBuffer = await file.arrayBuffer()

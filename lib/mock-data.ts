@@ -25,12 +25,14 @@ export interface Order {
     quantity: number
     price: number
     image: string
+    sellerId?: string
   }[]
   totalAmount: number
   profit: number
   status: 'unpaid' | 'paid' | 'pickup' | 'on_the_way' | 'out_for_delivery' | 'delivered' | 'cancelled'
   date: string
   shippingAddress: string
+  sellerId?: string
 }
 
 export interface NotificationItem {
@@ -45,8 +47,23 @@ export interface NotificationItem {
   details?: string
 }
 
+export interface KycSubmission {
+  status: 'pending' | 'approved' | 'rejected'
+  submittedAt?: string
+  documentType: 'national_id' | 'passport' | 'driving_license' | 'business_license'
+  idCardUrl?: string
+  businessLicenseUrl?: string
+  rejectionReason?: string
+  shopName?: string
+  ownerName?: string
+  email?: string
+  phone?: string
+  joined?: string
+}
+
 export interface SellerProfile {
   id?: string
+  kyc?: KycSubmission
   shopName: string
   ownerName: string
   email: string
@@ -143,11 +160,11 @@ export const initialNotifications: NotificationItem[] = []
 
 export const initialSellerProfile: SellerProfile = {
   shopName: 'tester',
-  ownerName: 'Zain',
+  ownerName: 'zain',
   email: 'zain55@gmail.com',
   phone: '+1 (555) 234-5678',
   currency: 'USD ($)',
-  balance: 0.00,
+  balance: 0.35,
   guarantee: 0.00,
   rating: 5.0,
   totalOrders: 0,
@@ -160,55 +177,27 @@ export const initialSellerProfile: SellerProfile = {
   productLimit: 'unlimited',
   activeItemsCount: 504,
   reviewCount: 504,
-  lastActiveAgo: '15h ago',
+  lastActiveAgo: '2d ago',
   joinedExact: '7 Aug 2026',
   viewsBooster: {
     enabled: false,
     multiplier: 1.0,
     extraDailyViews: 0,
   },
-  seoTitle: 'tester Official Store - Premium Products & Quick Delivery',
-  seoDescription: 'Shop top quality electronics, home goods, wellness and outdoor essentials from tester.',
+  seoTitle: 'tester Official Store',
+  seoDescription: 'Shop top quality products from tester.',
   avatarLetter: 'T',
-  payoutMethods: [
-    {
-      type: 'bank',
-      bankName: 'Chase Bank USA',
-      accountNumber: '•••• •••• 8842',
-      accountHolder: 'Zain',
-    }
-  ]
+  payoutMethods: [],
 }
 
 export const defaultCustomerProfile: CustomerProfile = {
-  name: 'Emily Davis',
-  username: 'usellerstore_customer',
-  email: 'usellerstore.us@gmail.com',
-  phone: '+1 (555) 482-9912',
+  name: '',
+  username: '',
+  email: '',
+  phone: '',
   avatarLetter: 'U',
   role: 'Customer account',
-  addresses: [
-    {
-      id: 'addr-1',
-      title: 'Home Address (Default)',
-      street: '452 Broadway Ave, Suite 4B',
-      city: 'New York',
-      state: 'NY',
-      zip: '10013',
-      country: 'United States',
-      isDefault: true,
-    },
-    {
-      id: 'addr-2',
-      title: 'Office / Business',
-      street: '742 Evergreen Terrace',
-      city: 'San Francisco',
-      state: 'CA',
-      zip: '94107',
-      country: 'United States',
-      isDefault: false,
-    },
-  ],
+  addresses: [],
   notifications: {
     emailAlerts: true,
     orderUpdates: true,
@@ -216,4 +205,5 @@ export const defaultCustomerProfile: CustomerProfile = {
     inAppAlerts: true,
   },
 }
+
 
