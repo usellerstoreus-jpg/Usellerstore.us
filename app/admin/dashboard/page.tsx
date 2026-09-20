@@ -34,7 +34,6 @@ import {
   RefreshCw,
   Menu,
   X,
-  Store,
   Check,
   CircleDollarSign,
   TrendingUp,
@@ -87,7 +86,9 @@ export default function AdminDashboardPage() {
         const storedSellers = localStorage.getItem('u_all_sellers')
         if (storedSellers) {
           const parsed = JSON.parse(storedSellers)
-          if (Array.isArray(parsed) && parsed.length > 0) setSellers(parsed)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSellers(parsed.filter((s: SellerProfile) => !s.isDeleted))
+          }
         }
       }
     } catch {}
@@ -104,12 +105,34 @@ export default function AdminDashboardPage() {
         if (supaOrders) setOrders(supaOrders)
         if (supaProds) setProducts(supaProds)
         if (supaProfile) setProfile(supaProfile)
-        if (supaSellers && supaSellers.length > 0) setSellers(supaSellers)
+        if (supaSellers && supaSellers.length > 0) {
+          setSellers(supaSellers.filter((s) => !s.isDeleted))
+        }
       } catch (err) {
         console.warn('[AdminDashboard] Sync error:', err)
       }
     }
     syncSupabase()
+
+    const handleSellerRemovedAction = (e: any) => {
+      const removed = e.detail || {}
+      if (removed.id || removed.email) {
+        setSellers((prev) =>
+          prev.filter(
+            (s) =>
+              s.id !== removed.id &&
+              s.email?.toLowerCase() !== (removed.email || '').toLowerCase()
+          )
+        )
+      }
+    }
+
+    window.addEventListener('u_seller_removed', handleSellerRemovedAction)
+    window.addEventListener('u_all_sellers_updated', handleSellerRemovedAction)
+    return () => {
+      window.removeEventListener('u_seller_removed', handleSellerRemovedAction)
+      window.removeEventListener('u_all_sellers_updated', handleSellerRemovedAction)
+    }
   }, [])
 
   // Dynamic real data metrics
@@ -118,9 +141,10 @@ export default function AdminDashboardPage() {
   const inProgressOrdersCount = orders.filter(
     (o) => o.status !== 'delivered' && o.status !== 'cancelled'
   ).length
-  const totalSellerBalances = sellers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
-  const activeSellersCount = sellers.filter((s) => !s.isSuspended).length
-  const pendingKycCount = sellers.filter((s) => !s.verified).length
+  const effectiveSellers = sellers.filter((s) => !s.isDeleted)
+  const totalSellerBalances = effectiveSellers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
+  const activeSellersCount = effectiveSellers.filter((s) => !s.isSuspended).length
+  const pendingKycCount = effectiveSellers.filter((s) => !s.verified).length
 
   return (
     <div className="app-shell admin-shell min-h-screen flex flex-col md:flex-row bg-[#F8FAFC]">
@@ -253,13 +277,6 @@ export default function AdminDashboardPage() {
               <span className="text-[10px] text-purple-300 font-semibold">Dashboard</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition-colors flex items-center gap-1"
-            onClick={() => router.push('/')}
-          >
-            <Store size={13} /> Storefront
-          </button>
         </div>
 
         <div className="p-5 sm:p-7 max-w-[1550px] mx-auto">

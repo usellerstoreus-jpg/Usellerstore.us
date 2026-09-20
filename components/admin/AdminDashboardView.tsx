@@ -95,9 +95,10 @@ export function AdminDashboardView({
   }, [withdrawalsList])
 
   // 1. Dynamic platform metrics calculated from real data
-  const totalSellerBalances = sellers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
-  const totalSellersCount = sellers.length
-  const pendingKycCount = sellers.filter((s) => !s.verified).length
+  const effectiveSellers = useMemo(() => sellers.filter((s) => !s.isDeleted), [sellers])
+  const totalSellerBalances = effectiveSellers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
+  const totalSellersCount = effectiveSellers.length
+  const pendingKycCount = effectiveSellers.filter((s) => !s.verified).length
 
   // Orders status distribution
   const pendingOrdersCount = orders.filter(

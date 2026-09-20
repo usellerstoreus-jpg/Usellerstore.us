@@ -426,19 +426,46 @@ export async function PATCH(request: Request) {
   }
 }
 
-// DELETE: Delete a withdrawal record
+// DELETE: Delete a withdrawal record or purge all withdrawals for a seller
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
-    if (!id) {
-      return NextResponse.json({ error: 'Missing withdrawal id' }, { status: 400 })
+    const sellerId = searchParams.get('sellerId')
+    const email = searchParams.get('email')
+
+    if (!id && !sellerId && !email) {
+      return NextResponse.json({ error: 'Missing withdrawal id, sellerId, or email' }, { status: 400 })
+    }
+
+    // Cascade purge all withdrawals for a specific seller
+    if (sellerId || email) {
+      const cleanSellerId = (sellerId || '').toLowerCase()
+      const cleanEmail = (email || '').toLowerCase()
+
+      inMemoryWithdrawals = inMemoryWithdrawals.filter((w) => {
+        if (cleanSellerId && w.sellerId && w.sellerId.toLowerCase() === cleanSellerId) return false
+        if (cleanEmail && w.email && w.email.toLowerCase() === cleanEmail) return false
+        return true
+      })
+
+      const client = getAdminClient()
+      if (client) {
+        if (cleanSellerId) {
+          await client.from('notifications').delete().eq('type', 'payout').ilike('details', `%"sellerId":"${cleanSellerId}"%`)
+        }
+        if (cleanEmail) {
+          await client.from('notifications').delete().eq('type', 'payout').ilike('details', `%"email":"${cleanEmail}"%`)
+        }
+      }
+
+      return NextResponse.json({ success: true, sellerId, email, message: 'Seller withdrawals purged successfully' })
     }
 
     inMemoryWithdrawals = inMemoryWithdrawals.filter((w) => w.id !== id)
 
     const client = getAdminClient()
-    if (client) {
+    if (client && id) {
       await client.from('notifications').delete().eq('id', id)
     }
 

@@ -864,6 +864,9 @@ export async function fetchSellerProfiles(): Promise<SellerProfile[]> {
     }
   }
 
+  // Ensure deleted sellers are excluded from active list
+  dbSellers = dbSellers.filter((s) => !s.isDeleted)
+
   // 3. Database is the single source of truth when connected
   if (dbSellers.length > 0) {
     if (typeof window !== 'undefined') {
@@ -880,7 +883,9 @@ export async function fetchSellerProfiles(): Promise<SellerProfile[]> {
       const stored = localStorage.getItem('u_all_sellers')
       if (stored) {
         const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((s: SellerProfile) => !s.isDeleted)
+        }
       }
     } catch {}
   }
@@ -1243,40 +1248,221 @@ export async function reviewKycSubmission(
 }
 
 /**
- * Delete a seller profile
+ * Delete a seller profile and cascade remove all associated data across the entire platform
  */
 export async function deleteSellerProfile(
   profileIdOrEmail: string,
-  permanent = false
+  permanent = true
 ): Promise<boolean> {
   const cleanKey = profileIdOrEmail.trim().toLowerCase()
 
+  // 1. Identify full seller info from local storage or cached sellers before removal
+  let targetSeller: SellerProfile | undefined
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('u_all_sellers')
+      if (stored) {
+        const all: SellerProfile[] = JSON.parse(stored)
+        targetSeller = all.find(
+          (s) => s.id?.toLowerCase() === cleanKey || s.email?.toLowerCase() === cleanKey
+        )
+      }
+      if (!targetSeller) {
+        const active = localStorage.getItem('u_seller_active_profile')
+        if (active) {
+          const parsed = JSON.parse(active)
+          if (parsed.id?.toLowerCase() === cleanKey || parsed.email?.toLowerCase() === cleanKey) {
+            targetSeller = parsed
+          }
+        }
+      }
+    }
+  } catch {}
+
+  const sellerId = targetSeller?.id || (cleanKey.includes('@') ? '' : cleanKey)
+  const sellerEmail = targetSeller?.email || (cleanKey.includes('@') ? cleanKey : '')
+  const shopName = targetSeller?.shopName || ''
+
   if (permanent) {
     if (typeof window !== 'undefined') {
+      // 2. Call backend /api/sellers DELETE which cascade purges Supabase tables
       try {
-        const param = cleanKey.includes('@') ? `email=${encodeURIComponent(cleanKey)}` : `id=${encodeURIComponent(cleanKey)}`
-        await fetch(`/api/sellers?${param}`, { method: 'DELETE' })
+        const params = new URLSearchParams()
+        if (sellerId) params.set('id', sellerId)
+        if (sellerEmail) params.set('email', sellerEmail)
+        await fetch(`/api/sellers?${params.toString()}`, { method: 'DELETE' })
+      } catch (err) {
+        console.warn('[Supabase API] Failed to delete seller via backend API:', err)
+      }
+
+      // 3. Clear seller login sessions in memory & cache
+      try {
+        if (sellerId) {
+          await fetch(`/api/sellers/login-history?sellerId=${encodeURIComponent(sellerId)}`, { method: 'DELETE' })
+        }
+      } catch {}
+
+      // 4. Purge seller withdrawals in memory & notifications
+      try {
+        const wParams = new URLSearchParams()
+        if (sellerId) wParams.set('sellerId', sellerId)
+        if (sellerEmail) wParams.set('email', sellerEmail)
+        await fetch(`/api/withdrawals?${wParams.toString()}`, { method: 'DELETE' })
       } catch {}
     }
   } else {
-    // Soft delete
+    // Soft delete fallback if ever explicitly called with false
     await updateSellerProfile(
       { isDeleted: true, deletedAt: new Date().toISOString() },
-      cleanKey.includes('@') ? undefined : cleanKey,
-      cleanKey.includes('@') ? cleanKey : undefined
+      sellerId || undefined,
+      sellerEmail || undefined
     )
   }
 
-  // Remove or update in local storage
+  // 5. Thoroughly purge all LocalStorage keys and sessions across all subsystems
   if (typeof window !== 'undefined') {
     try {
+      // a. Remove from u_all_sellers
       const stored = localStorage.getItem('u_all_sellers')
       if (stored) {
         const all: SellerProfile[] = JSON.parse(stored)
         const updated = permanent
-          ? all.filter((s) => s.id !== cleanKey && s.email?.toLowerCase() !== cleanKey)
-          : all.map((s) => (s.id === cleanKey || s.email?.toLowerCase() === cleanKey ? { ...s, isDeleted: true } : s))
+          ? all.filter(
+              (s) =>
+                s.id?.toLowerCase() !== cleanKey &&
+                s.email?.toLowerCase() !== cleanKey &&
+                (sellerId ? s.id !== sellerId : true) &&
+                (sellerEmail ? s.email?.toLowerCase() !== sellerEmail.toLowerCase() : true)
+            )
+          : all.map((s) =>
+              s.id === cleanKey || s.email?.toLowerCase() === cleanKey
+                ? { ...s, isDeleted: true }
+                : s
+            )
         localStorage.setItem('u_all_sellers', JSON.stringify(updated))
+      }
+
+      // b. Invalidate u_seller_active_profile if it matches the removed merchant
+      const activeRaw = localStorage.getItem('u_seller_active_profile')
+      if (activeRaw) {
+        const active: SellerProfile = JSON.parse(activeRaw)
+        const isTarget =
+          active.id?.toLowerCase() === cleanKey ||
+          active.email?.toLowerCase() === cleanKey ||
+          (sellerId && active.id === sellerId) ||
+          (sellerEmail && active.email?.toLowerCase() === sellerEmail.toLowerCase()) ||
+          (shopName && active.shopName?.toLowerCase() === shopName.toLowerCase())
+
+        if (isTarget) {
+          localStorage.removeItem('u_seller_active_profile')
+        }
+      }
+
+      // c. Invalidate u_auth_session if the logged in user is this merchant
+      const authRaw = localStorage.getItem('u_auth_session')
+      if (authRaw) {
+        const auth = JSON.parse(authRaw)
+        const isAuthTarget =
+          auth.profile &&
+          (auth.profile.id?.toLowerCase() === cleanKey ||
+            auth.profile.email?.toLowerCase() === cleanKey ||
+            (sellerId && auth.profile.id === sellerId) ||
+            (sellerEmail && auth.profile.email?.toLowerCase() === sellerEmail.toLowerCase()) ||
+            (shopName && auth.profile.shopName?.toLowerCase() === shopName.toLowerCase()))
+
+        if (isAuthTarget) {
+          localStorage.removeItem('u_auth_session')
+        }
+      }
+
+      // d. Remove login sessions cache
+      if (sellerId) localStorage.removeItem(`u_seller_login_history_${sellerId}`)
+      if (sellerEmail) localStorage.removeItem(`u_seller_login_history_${sellerEmail}`)
+
+      // e. Purge withdrawals cache
+      const wRaw = localStorage.getItem('u_admin_withdrawals_v1')
+      if (wRaw) {
+        const wList = JSON.parse(wRaw)
+        if (Array.isArray(wList)) {
+          const updatedW = wList.filter((w: any) => {
+            const wSellerId = (w.sellerId || '').toLowerCase()
+            const wEmail = (w.email || '').toLowerCase()
+            const wShop = (w.shopName || '').toLowerCase()
+            if (sellerId && wSellerId === sellerId.toLowerCase()) return false
+            if (sellerEmail && wEmail === sellerEmail.toLowerCase()) return false
+            if (shopName && wShop === shopName.toLowerCase()) return false
+            if (cleanKey && (wSellerId === cleanKey || wEmail === cleanKey)) return false
+            return true
+          })
+          localStorage.setItem('u_admin_withdrawals_v1', JSON.stringify(updatedW))
+        }
+      }
+
+      // f. Purge orders cache
+      const oRaw = localStorage.getItem('u_seller_orders')
+      if (oRaw) {
+        const oList = JSON.parse(oRaw)
+        if (Array.isArray(oList)) {
+          const updatedOrders = oList.filter((o: any) => {
+            const oSellerId = (o.sellerId || (o.items && o.items[0]?.sellerId) || '').toLowerCase()
+            if (sellerId && oSellerId === sellerId.toLowerCase()) return false
+            if (sellerEmail && oSellerId === sellerEmail.toLowerCase()) return false
+            if (cleanKey && oSellerId === cleanKey) return false
+            return true
+          })
+          localStorage.setItem('u_seller_orders', JSON.stringify(updatedOrders))
+        }
+      }
+
+      // g. Purge products cache
+      const pRaw = localStorage.getItem('u_seller_products')
+      if (pRaw) {
+        const pList = JSON.parse(pRaw)
+        if (Array.isArray(pList)) {
+          const updatedProducts = pList.filter((p: any) => {
+            if (sellerId && (p.sellerId === sellerId || p.id?.includes(sellerId))) return false
+            if (sellerEmail && p.sellerId === sellerEmail) return false
+            if (shopName && p.sku?.toLowerCase().includes(shopName.toLowerCase())) return false
+            return true
+          })
+          localStorage.setItem('u_seller_products', JSON.stringify(updatedProducts))
+        }
+      }
+
+      // h. Purge notifications cache
+      const nRaw = localStorage.getItem('u_seller_notifications')
+      if (nRaw) {
+        const nList = JSON.parse(nRaw)
+        if (Array.isArray(nList)) {
+          const updatedNotifs = nList.filter((n: any) => {
+            const str = JSON.stringify(n).toLowerCase()
+            if (sellerId && str.includes(sellerId.toLowerCase())) return false
+            if (sellerEmail && str.includes(sellerEmail.toLowerCase())) return false
+            if (shopName && str.includes(shopName.toLowerCase())) return false
+            return true
+          })
+          localStorage.setItem('u_seller_notifications', JSON.stringify(updatedNotifs))
+        }
+      }
+    } catch (e) {
+      console.warn('[deleteSellerProfile] Storage cleanup error:', e)
+    }
+
+    // 6. Broadcast window custom events for instant reactivity in current window
+    const eventPayload = { id: sellerId, email: sellerEmail, shopName }
+    window.dispatchEvent(new CustomEvent('u_seller_removed', { detail: eventPayload }))
+    window.dispatchEvent(new CustomEvent('u_all_sellers_updated', { detail: eventPayload }))
+    window.dispatchEvent(new CustomEvent('u_withdrawals_updated'))
+    window.dispatchEvent(new CustomEvent('u_orders_updated'))
+    window.dispatchEvent(new CustomEvent('u_products_updated'))
+    window.dispatchEvent(new CustomEvent('u_seller_notifications_update'))
+
+    // 7. Broadcast across tabs and windows via BroadcastChannel
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('u_system_sync')
+        channel.postMessage({ type: 'SELLER_REMOVED', payload: eventPayload })
+        channel.close()
       }
     } catch {}
   }

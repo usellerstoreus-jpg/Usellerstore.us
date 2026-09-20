@@ -4,7 +4,6 @@ import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
   Check,
   X,
-  ChevronDown,
   Sparkles,
   Users,
   Search,
@@ -318,6 +317,7 @@ function AdminPanel({
   onToast,
   onSignOut,
   onSwitchToSeller,
+  onDeleteSeller,
   initialTab = 'Dashboard',
 }: {
   orders: Order[]
@@ -331,6 +331,7 @@ function AdminPanel({
   onToast: (message: string) => void
   onSignOut: () => void
   onSwitchToSeller: (seller?: SellerProfile) => void
+  onDeleteSeller?: (seller: SellerProfile) => void
   initialTab?: string
 }) {
   const [active, setActive] = useState<string>(() => {
@@ -354,8 +355,9 @@ function AdminPanel({
   const inProgressOrdersCount = orders.filter(
     (o) => o.status !== 'delivered' && o.status !== 'cancelled'
   ).length
-  const activeSellersCount = sellers.filter((s) => !s.isSuspended).length
-  const pendingKycCount = sellers.filter((s) => !s.verified).length
+  const effectiveSellers = sellers.filter((s) => !s.isDeleted)
+  const activeSellersCount = effectiveSellers.filter((s) => !s.isSuspended).length
+  const pendingKycCount = effectiveSellers.filter((s) => !s.verified).length
 
   return (
     <div className="app-shell admin-shell">
@@ -403,18 +405,6 @@ function AdminPanel({
               <span className="text-[10px] text-purple-300 font-semibold">{active}</span>
             </div>
           </div>
-          {active !== 'Withdrawals' && (
-            <button
-              type="button"
-              className="px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition-colors flex items-center gap-1 cursor-pointer"
-              onClick={() => {
-                onSwitchToSeller()
-                onToast('Switched to Seller Storefront view')
-              }}
-            >
-              <Store size={13} /> Storefront
-            </button>
-          )}
         </div>
 
         {active !== 'Orders' && active !== 'Withdrawals' && (
@@ -425,29 +415,17 @@ function AdminPanel({
               </span>
               <div>
                 <div className="flex items-center gap-2">
-                <h1 className="m-0 text-xl font-bold text-slate-900">{active}</h1>
-                <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
-                  Management Console
-                </span>
+                  <h1 className="m-0 text-xl font-bold text-slate-900">{active}</h1>
+                  <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
+                    Management Console
+                  </span>
+                </div>
+                <p className="m-0 text-xs text-slate-500 mt-0.5">
+                  Full platform oversight, seller compliance, KYC reviews, and settlement controls.
+                </p>
               </div>
-              <p className="m-0 text-xs text-slate-500 mt-0.5">
-                Full platform oversight, seller compliance, KYC reviews, and settlement controls.
-              </p>
             </div>
           </div>
-          <div className="admin-tools">
-            <button
-              type="button"
-              className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-              onClick={() => {
-                onSwitchToSeller()
-                onToast('Switched to Seller Storefront view')
-              }}
-            >
-              <Store size={14} /> Open Storefront
-            </button>
-          </div>
-        </div>
         )}
 
         <div className="p-6 space-y-6">
@@ -483,7 +461,7 @@ function AdminPanel({
                     </span>
                   </div>
                   <strong className="text-2xl font-black text-slate-900 block tabular-nums">
-                    {sellers.length} {sellers.length === 1 ? 'Store' : 'Stores'}
+                    {effectiveSellers.length} {effectiveSellers.length === 1 ? 'Store' : 'Stores'}
                   </strong>
                   <span className="text-xs text-emerald-600 font-semibold mt-1 block">
                     {activeSellersCount} active · 100% operational
@@ -615,6 +593,7 @@ function AdminPanel({
               orders={orders || initialOrders}
               onToast={onToast}
               onSwitchToSeller={onSwitchToSeller}
+              onDeleteSeller={onDeleteSeller}
             />
           )}
 
@@ -1575,7 +1554,6 @@ export default function Page() {
   const [mode, setMode] = useState<Mode>('seller')
   const [sellerTab, setSellerTab] = useState<SellerTab>('Dashboard')
   const [toast, setToast] = useState('')
-  const [modeOpen, setModeOpen] = useState(false)
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isKycModalOpen, setIsKycModalOpen] = useState(false)
@@ -1650,7 +1628,9 @@ export default function Page() {
         const storedSellers = localStorage.getItem('u_all_sellers')
         if (storedSellers) {
           const parsed = JSON.parse(storedSellers)
-          if (Array.isArray(parsed) && parsed.length > 0) setSellers(parsed)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSellers(parsed.filter((s: SellerProfile) => !s.isDeleted))
+          }
         }
         isDataLoadedRef.current = true
       }
@@ -1685,7 +1665,9 @@ export default function Page() {
         } catch {}
       }
       if (supaProfile) setProfile(supaProfile)
-      if (supaSellers && supaSellers.length > 0) setSellers(supaSellers)
+      if (supaSellers && supaSellers.length > 0) {
+        setSellers(supaSellers.filter((s) => !s.isDeleted))
+      }
     } catch (err) {
       console.warn('[Supabase] Sync error:', err)
     } finally {
@@ -1742,6 +1724,96 @@ export default function Page() {
     return () => {
       window.removeEventListener('u_seller_notifications_update', handleNotifUpdate)
       window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
+
+  // Real-time synchronization when a merchant or store is removed from Admin
+  useEffect(() => {
+    const handleSellerRemovedAction = (detail: any) => {
+      const removedId = (detail?.id || '').toLowerCase()
+      const removedEmail = (detail?.email || '').toLowerCase()
+      const removedShop = (detail?.shopName || '').toLowerCase()
+
+      // 1. If currently logged in as this seller, immediately terminate session and kick to login
+      setProfile((currentProf) => {
+        const cId = (currentProf.id || '').toLowerCase()
+        const cEmail = (currentProf.email || '').toLowerCase()
+        const cShop = (currentProf.shopName || '').toLowerCase()
+
+        const isCurrentTarget =
+          (removedId && cId === removedId) ||
+          (removedEmail && cEmail === removedEmail) ||
+          (removedShop && cShop === removedShop)
+
+        if (isCurrentTarget) {
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('u_auth_session')
+              localStorage.removeItem('u_seller_active_profile')
+            }
+          } catch {}
+          setMode('login')
+          showToast('Your merchant store has been permanently removed by administration.')
+          return initialSellerProfile
+        }
+        return currentProf
+      })
+
+      // 2. Remove seller from local sellers list
+      setSellers((prev) =>
+        prev.filter((s) => {
+          const sId = (s.id || '').toLowerCase()
+          const sEmail = (s.email || '').toLowerCase()
+          const sShop = (s.shopName || '').toLowerCase()
+          if (removedId && sId === removedId) return false
+          if (removedEmail && sEmail === removedEmail) return false
+          if (removedShop && sShop === removedShop) return false
+          return true
+        })
+      )
+
+      // 3. Remove orders associated with this seller
+      setOrders((prev) =>
+        prev.filter((o) => {
+          const oSellerId = (o.sellerId || (o.items && o.items[0]?.sellerId) || '').toLowerCase()
+          if (removedId && oSellerId === removedId) return false
+          if (removedEmail && oSellerId === removedEmail) return false
+          return true
+        })
+      )
+
+      // 4. Remove products associated with this seller
+      setProducts((prev) =>
+        prev.filter((p: any) => {
+          if (removedId && (p.sellerId === removedId || p.id?.includes(removedId))) return false
+          if (removedEmail && p.sellerId === removedEmail) return false
+          if (removedShop && p.sku?.toLowerCase().includes(removedShop)) return false
+          return true
+        })
+      )
+    }
+
+    const handleCustomEvent = (e: any) => {
+      handleSellerRemovedAction(e.detail)
+    }
+
+    window.addEventListener('u_seller_removed', handleCustomEvent)
+
+    let channel: BroadcastChannel | null = null
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        channel = new BroadcastChannel('u_system_sync')
+        channel.onmessage = (event) => {
+          if (event.data?.type === 'SELLER_REMOVED') {
+            handleSellerRemovedAction(event.data.payload)
+          }
+        }
+      }
+    } catch {}
+
+    return () => {
+      window.removeEventListener('u_seller_removed', handleCustomEvent)
+      if (channel) channel.close()
     }
   }, [])
 
@@ -2462,63 +2534,6 @@ export default function Page() {
 
   return (
     <>
-      {mode !== 'login' && (
-        <header className="mode-switcher flex items-center gap-2">
-          <button
-            type="button"
-            className="mode-trigger"
-            onClick={() => setModeOpen(!modeOpen)}
-          >
-            <span className="mode-dot" />
-            <span>U Seller Store ({mode.toUpperCase()})</span>
-            <ChevronDown size={15} />
-          </button>
-          {modeOpen && (
-            <div className="mode-menu">
-              <button
-                type="button"
-                id="mode-switch-shop"
-                onClick={() => {
-                  setMode('shop')
-                  setModeOpen(false)
-                }}
-              >
-                🛍️ Shopping Storefront
-              </button>
-              <button
-                type="button"
-                id="mode-switch-seller"
-                onClick={() => {
-                  setMode('seller')
-                  setModeOpen(false)
-                }}
-              >
-                Seller account
-              </button>
-              <button
-                type="button"
-                id="mode-switch-admin"
-                onClick={() => {
-                  setMode('admin')
-                  setModeOpen(false)
-                }}
-              >
-                Admin panel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('login')
-                  setModeOpen(false)
-                }}
-              >
-                Sign out / Switch account
-              </button>
-            </div>
-          )}
-        </header>
-      )}
-
       {mode === 'shop' ? (
         <ShoppingDashboard
           products={products}
@@ -2742,6 +2757,9 @@ export default function Page() {
           onCreateOrder={handleCreateOrderFromShop}
           onToast={showToast}
           onSignOut={signOut}
+          onDeleteSeller={(s) => {
+            setSellers((prev) => prev.filter((item) => item.id !== s.id && item.email?.toLowerCase() !== s.email?.toLowerCase()))
+          }}
           onSwitchToSeller={(targetSeller) => {
             if (targetSeller) {
               setProfile(targetSeller)

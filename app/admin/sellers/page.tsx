@@ -34,7 +34,6 @@ import {
   RefreshCw,
   Menu,
   X,
-  Store,
   Check
 } from 'lucide-react'
 
@@ -90,7 +89,9 @@ export default function AdminSellersPage() {
         const storedSellers = localStorage.getItem('u_all_sellers')
         if (storedSellers) {
           const parsed = JSON.parse(storedSellers)
-          if (Array.isArray(parsed) && parsed.length > 0) setSellers(parsed)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSellers(parsed.filter((s: SellerProfile) => !s.isDeleted))
+          }
         }
       }
     } catch {}
@@ -107,12 +108,34 @@ export default function AdminSellersPage() {
         if (supaOrders) setOrders(supaOrders)
         if (supaProds) setProducts(supaProds)
         if (supaProfile) setProfile(supaProfile)
-        if (supaSellers && supaSellers.length > 0) setSellers(supaSellers)
+        if (supaSellers && supaSellers.length > 0) {
+          setSellers(supaSellers.filter((s) => !s.isDeleted))
+        }
       } catch (err) {
         console.warn('[AdminSellers] Sync error:', err)
       }
     }
     syncSupabase()
+
+    const handleSellerRemovedAction = (e: any) => {
+      const removed = e.detail || {}
+      if (removed.id || removed.email) {
+        setSellers((prev) =>
+          prev.filter(
+            (s) =>
+              s.id !== removed.id &&
+              s.email?.toLowerCase() !== (removed.email || '').toLowerCase()
+          )
+        )
+      }
+    }
+
+    window.addEventListener('u_seller_removed', handleSellerRemovedAction)
+    window.addEventListener('u_all_sellers_updated', handleSellerRemovedAction)
+    return () => {
+      window.removeEventListener('u_seller_removed', handleSellerRemovedAction)
+      window.removeEventListener('u_all_sellers_updated', handleSellerRemovedAction)
+    }
   }, [])
 
   return (
@@ -249,13 +272,6 @@ export default function AdminSellersPage() {
               <span className="text-[10px] text-purple-300 font-semibold">Sellers</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition-colors flex items-center gap-1"
-            onClick={() => router.push('/')}
-          >
-            <Store size={13} /> Storefront
-          </button>
         </div>
 
         <div className="p-4 sm:p-6 max-w-[1400px] mx-auto">
@@ -266,6 +282,9 @@ export default function AdminSellersPage() {
               products={products}
               orders={orders}
               onToast={showToast}
+              onDeleteSeller={(s) => {
+                setSellers((prev) => prev.filter((item) => item.id !== s.id && item.email !== s.email))
+              }}
               onSwitchToSeller={(s) => {
                 if (s) {
                   try {

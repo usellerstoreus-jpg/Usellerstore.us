@@ -115,7 +115,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    const sellers = (data || []).map(parseSellerRow)
+    const allParsed = (data || []).map(parseSellerRow)
+    const includeDeleted = searchParams.get('includeDeleted') === 'true'
+    const sellers = includeDeleted ? allParsed : allParsed.filter((s) => !s.isDeleted)
     return NextResponse.json({ sellers, count: sellers.length })
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 })
@@ -364,7 +366,7 @@ export async function PATCH(request: Request) {
   }
 }
 
-// DELETE: Delete seller profile from Supabase
+// DELETE: Permanently delete seller profile and cascade delete all associated data across the system
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
@@ -375,22 +377,147 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Supabase client not configured' }, { status: 500 })
   }
 
+  if (!id && !email) {
+    return NextResponse.json({ error: 'id or email is required' }, { status: 400 })
+  }
+
   try {
-    let query = client.from('seller_profiles').delete()
+    // 1. Fetch existing seller first to obtain full identity details (id, email, shop_name)
+    let fetchQuery = client.from('seller_profiles').select('*')
     if (id) {
-      query = query.eq('id', id)
+      fetchQuery = fetchQuery.eq('id', id)
     } else if (email) {
-      query = query.ilike('email', email.trim())
+      fetchQuery = fetchQuery.ilike('email', email.trim())
+    }
+
+    const { data: sellerRow } = await fetchQuery.maybeSingle()
+    const targetId = sellerRow?.id || id || ''
+    const targetEmail = (sellerRow?.email || email || '').trim().toLowerCase()
+    const targetShopName = sellerRow?.shop_name || 'Merchant'
+    const targetOwnerName = sellerRow?.owner_name || targetShopName
+
+    // 2. Cascade delete from `notifications` table:
+    // Wipes payout requests, KYC verification submissions, and activity entries for this seller
+    try {
+      if (targetId) {
+        await client.from('notifications').delete().ilike('details', `%"sellerId":"${targetId}"%`)
+        await client.from('notifications').delete().ilike('details', `%"userId":"${targetId}"%`)
+        await client.from('notifications').delete().eq('ref_code', `KYC-${targetId.slice(-4).toUpperCase()}`)
+      }
+      if (targetEmail) {
+        await client.from('notifications').delete().ilike('details', `%"email":"${targetEmail}"%`)
+      }
+      if (targetShopName) {
+        await client.from('notifications').delete().ilike('details', `%"shopName":"${targetShopName}"%`)
+      }
+    } catch (notifErr: any) {
+      console.warn('[API /api/sellers DELETE] Notification cleanup error:', notifErr?.message)
+    }
+
+    // 3. Cascade delete associated orders from `orders` table
+    try {
+      const { data: allOrders } = await client.from('orders').select('*')
+      if (allOrders && allOrders.length > 0) {
+        const orderIdsToDelete: string[] = []
+        for (const order of allOrders) {
+          const firstItem = Array.isArray(order.items) ? order.items[0] : null
+          const orderSellerId = order.seller_id || (firstItem && firstItem.sellerId) || ''
+          const matchesId =
+            targetId &&
+            (orderSellerId === targetId ||
+              (Array.isArray(order.items) && order.items.some((it: any) => it.sellerId === targetId)))
+          const matchesEmail =
+            targetEmail &&
+            (orderSellerId === targetEmail ||
+              (Array.isArray(order.items) && order.items.some((it: any) => it.sellerId === targetEmail)))
+
+          if (matchesId || matchesEmail) {
+            orderIdsToDelete.push(order.id)
+          }
+        }
+        if (orderIdsToDelete.length > 0) {
+          await client.from('orders').delete().in('id', orderIdsToDelete)
+        }
+      }
+    } catch (orderErr: any) {
+      console.warn('[API /api/sellers DELETE] Order cleanup error:', orderErr?.message)
+    }
+
+    // 4. Cascade delete associated products from `products` table
+    try {
+      const { data: allProducts } = await client.from('products').select('*')
+      if (allProducts && allProducts.length > 0) {
+        const prodIdsToDelete: string[] = []
+        for (const prod of allProducts) {
+          const matchesTarget =
+            (targetId && (prod.id?.includes(targetId) || prod.sku?.includes(targetId))) ||
+            (targetShopName && prod.sku?.toLowerCase().includes(targetShopName.toLowerCase()))
+          if (matchesTarget) {
+            prodIdsToDelete.push(prod.id)
+          }
+        }
+        if (prodIdsToDelete.length > 0) {
+          await client.from('products').delete().in('id', prodIdsToDelete)
+        }
+      }
+    } catch (prodErr: any) {
+      console.warn('[API /api/sellers DELETE] Product cleanup error:', prodErr?.message)
+    }
+
+    // 5. Delete row from `seller_profiles`
+    let deleteQuery = client.from('seller_profiles').delete()
+    if (targetId) {
+      deleteQuery = deleteQuery.eq('id', targetId)
     } else {
-      return NextResponse.json({ error: 'id or email is required' }, { status: 400 })
+      deleteQuery = deleteQuery.ilike('email', targetEmail)
+    }
+    const { error: deleteErr } = await deleteQuery
+    if (deleteErr) {
+      return NextResponse.json({ error: deleteErr.message }, { status: 400 })
     }
 
-    const { error } = await query
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
+    // 6. Record system audit activity log in `notifications`
+    try {
+      await client.from('notifications').insert({
+        id: `act-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        title: 'Merchant Store Permanently Removed',
+        description: `Store "${targetShopName}" (${targetEmail}) and all associated catalog, orders, and withdrawals were completely purged by administration.`,
+        date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase(),
+        time_ago: 'Just now',
+        ref_code: `#ACT-${Date.now().toString().slice(-6)}`,
+        type: 'system',
+        read: false,
+        details: JSON.stringify({
+          action: 'seller_permanently_deleted',
+          category: 'merchants',
+          userId: targetId,
+          user: {
+            name: 'Admin Console',
+            email: 'admin@usellerstore.com',
+            role: 'admin',
+            shopName: targetShopName,
+          },
+          target: {
+            id: targetId,
+            shopName: targetShopName,
+            email: targetEmail,
+            ownerName: targetOwnerName,
+          },
+          status: 'warning',
+          timestamp: new Date().toISOString(),
+        }),
+      })
+    } catch {}
 
-    return NextResponse.json({ success: true, message: 'Seller profile deleted from database' })
+    return NextResponse.json({
+      success: true,
+      message: `Store "${targetShopName}" and all associated data permanently purged from system.`,
+      purged: {
+        id: targetId,
+        email: targetEmail,
+        shopName: targetShopName,
+      },
+    })
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 })
   }

@@ -76,6 +76,7 @@ export interface AdminSellersViewProps {
   orders?: Order[]
   onToast: (msg: string) => void
   onSwitchToSeller?: (sellerProfile?: SellerProfile) => void
+  onDeleteSeller?: (sellerProfile: SellerProfile) => void
 }
 
 type ModalType =
@@ -122,17 +123,20 @@ export function AdminSellersView({
   orders = [],
   onToast,
   onSwitchToSeller,
+  onDeleteSeller,
 }: AdminSellersViewProps) {
   // Main seller state initialized cleanly without SSR mismatch
   const [seller, setSeller] = useState<SellerProfile>(initialSeller || initialSellerProfile)
 
   // List of sellers (dynamically synced from database & props)
   const [sellersList, setSellersList] = useState<SellerProfile[]>(() => {
-    if (sellers && sellers.length > 0) return sellers
-    return [initialSeller || initialSellerProfile]
+    const active = (sellers || []).filter((s) => !s.isDeleted)
+    if (active.length > 0) return active
+    return initialSeller && !initialSeller.isDeleted ? [initialSeller] : []
   })
   const [selectedSeller, setSelectedSeller] = useState<SellerProfile>(() => {
-    if (sellers && sellers.length > 0) return sellers[0]
+    const active = (sellers || []).filter((s) => !s.isDeleted)
+    if (active.length > 0) return active[0]
     return initialSeller || initialSellerProfile
   })
   const [searchQuery, setSearchQuery] = useState('')
@@ -156,14 +160,42 @@ export function AdminSellersView({
 
   // Sync sellers prop when loaded
   useEffect(() => {
-    if (sellers && sellers.length > 0) {
-      setSellersList(sellers)
+    if (sellers) {
+      const activeOnly = sellers.filter((s) => !s.isDeleted)
+      setSellersList(activeOnly)
       setSelectedSeller((prev) => {
-        const match = sellers.find((s) => s.email === prev.email || s.id === prev.id)
-        return match || sellers[0]
+        const match = activeOnly.find((s) => s.email === prev.email || s.id === prev.id)
+        return match || activeOnly[0] || initialSellerProfile
       })
     }
   }, [sellers])
+
+  // Listen to u_seller_removed events to automatically prune removed sellers
+  useEffect(() => {
+    const handleRemoved = (e: any) => {
+      const removed = e.detail || {}
+      if (removed.id || removed.email) {
+        setSellersList((prev) =>
+          prev.filter(
+            (s) =>
+              s.id !== removed.id &&
+              s.email?.toLowerCase() !== (removed.email || '').toLowerCase()
+          )
+        )
+        setSelectedSeller((prev) => {
+          if (
+            prev.id === removed.id ||
+            prev.email?.toLowerCase() === (removed.email || '').toLowerCase()
+          ) {
+            return initialSellerProfile
+          }
+          return prev
+        })
+      }
+    }
+    window.addEventListener('u_seller_removed', handleRemoved)
+    return () => window.removeEventListener('u_seller_removed', handleRemoved)
+  }, [])
 
   // Onboard Seller modal state
   const [onboardShopName, setOnboardShopName] = useState('')
@@ -173,17 +205,19 @@ export function AdminSellersView({
   const [onboardBalance, setOnboardBalance] = useState('0.00')
   const [onboardGuarantee, setOnboardGuarantee] = useState('0.00')
   const [isOnboarding, setIsOnboarding] = useState(false)
+  const [isDeletingStore, setIsDeletingStore] = useState(false)
 
   // Sync sellers list from Supabase on mount
   useEffect(() => {
     async function loadSellers() {
       try {
         const fetched = await fetchSellerProfiles()
-        if (fetched && fetched.length > 0) {
-          setSellersList(fetched)
+        if (fetched) {
+          const activeOnly = fetched.filter((s) => !s.isDeleted)
+          setSellersList(activeOnly)
           setSelectedSeller((prev) => {
-            const match = fetched.find((s) => s.email === prev.email || s.id === prev.id)
-            return match || fetched[0]
+            const match = activeOnly.find((s) => s.email === prev.email || s.id === prev.id)
+            return match || activeOnly[0] || initialSellerProfile
           })
         }
       } catch (err) {
@@ -731,14 +765,45 @@ export function AdminSellersView({
     setActiveModal(null)
   }
 
-  // 13. Delete Store (Soft delete & Restore)
+  // 13. Delete Store (Permanent purge across all systems)
   const handleDeleteStore = async () => {
-    await deleteSellerProfile(selectedSeller.email || selectedSeller.id || '')
-    setSellersList((prev) =>
-      prev.map((s) => (s.email === selectedSeller.email ? { ...s, isDeleted: true } : s))
-    )
-    onToast(`Store "${selectedSeller.shopName}" moved to Deleted archive.`)
-    setActiveModal(null)
+    if (!selectedSeller) return
+    const target = selectedSeller
+    setIsDeletingStore(true)
+    try {
+      await deleteSellerProfile(target.id || target.email || '', true)
+
+      setSellersList((prev) =>
+        prev.filter(
+          (s) =>
+            s.id !== target.id &&
+            s.email?.toLowerCase() !== target.email?.toLowerCase()
+        )
+      )
+
+      if (onDeleteSeller) {
+        onDeleteSeller(target)
+      }
+
+      // Re-select next remaining seller
+      const remaining = sellersList.filter(
+        (s) =>
+          s.id !== target.id &&
+          s.email?.toLowerCase() !== target.email?.toLowerCase()
+      )
+      if (remaining.length > 0) {
+        setSelectedSeller(remaining[0])
+      } else {
+        setSelectedSeller(initialSellerProfile)
+      }
+
+      onToast(`Store "${target.shopName}" and all associated platform data permanently removed.`)
+      setActiveModal(null)
+    } catch (err: any) {
+      onToast(err?.message || 'Failed to remove store')
+    } finally {
+      setIsDeletingStore(false)
+    }
   }
 
   const handleRestoreStore = async (targetToRestore?: SellerProfile) => {
@@ -1305,18 +1370,32 @@ export function AdminSellersView({
                             </span>
                           </button>
                           {s.isDeleted ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedSeller(s)
-                                setActiveMenuId(null)
-                                handleRestoreStore(s)
-                              }}
-                              className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition-colors text-left cursor-pointer"
-                            >
-                              <RotateCcw size={15} className="text-emerald-500" />
-                              <span>Restore Store</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSeller(s)
+                                  setActiveMenuId(null)
+                                  handleRestoreStore(s)
+                                }}
+                                className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition-colors text-left cursor-pointer"
+                              >
+                                <RotateCcw size={15} className="text-emerald-500" />
+                                <span>Restore Store</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSeller(s)
+                                  setActiveMenuId(null)
+                                  setActiveModal('deleteStore')
+                                }}
+                                className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors text-left cursor-pointer"
+                              >
+                                <Trash2 size={15} className="text-rose-500" />
+                                <span>Delete Permanently</span>
+                              </button>
+                            </>
                           ) : (
                             <button
                               type="button"
@@ -2624,7 +2703,7 @@ export function AdminSellersView({
         </div>
       )}
 
-      {/* 13. DELETE STORE MODAL */}
+      {/* 13. PERMANENTLY REMOVE STORE MODAL */}
       {activeModal === 'deleteStore' && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95">
@@ -2633,32 +2712,52 @@ export function AdminSellersView({
                 <Trash2 size={20} />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900 m-0">Delete Store</h3>
+                <h3 className="text-sm font-bold text-slate-900 m-0">Permanently Remove Store</h3>
                 <p className="text-xs text-slate-500 m-0">
-                  Target merchant: <b className="text-slate-800">{selectedSeller.shopName}</b>
+                  Target merchant: <b className="text-slate-800">{selectedSeller.shopName}</b> ({selectedSeller.email})
                 </p>
               </div>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed bg-rose-50/70 p-3.5 rounded-2xl border border-rose-200/80">
-              Are you sure you want to delete store <b className="text-rose-900">{selectedSeller.shopName}</b>?
-              This store will be moved to the <b>Deleted</b> archive view. You can review or restore it anytime using the Deleted toggle in the header.
-            </p>
+            <div className="text-xs text-rose-900 leading-relaxed bg-rose-50/90 p-4 rounded-2xl border border-rose-200/90 space-y-2.5">
+              <p className="font-bold m-0 flex items-center gap-1.5 text-rose-700">
+                <AlertTriangle size={16} className="shrink-0 text-rose-600" />
+                This action is irreversible and permanently purges all merchant data:
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-rose-800 m-0 text-[11px]">
+                <li>Merchant profile completely deleted from database.</li>
+                <li>All products, orders, & customer transactions purged.</li>
+                <li>Pending withdrawals & KYC review files wiped.</li>
+                <li>Active seller sessions revoked and signed out immediately.</li>
+              </ul>
+            </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">
               <button
                 type="button"
+                disabled={isDeletingStore}
                 onClick={() => setActiveModal(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                disabled={isDeletingStore}
                 onClick={handleDeleteStore}
-                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
-                Confirm Delete
+                {isDeletingStore ? (
+                  <>
+                    <RefreshCw size={13} className="animate-spin" />
+                    Purging Merchant...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    Permanently Remove Store
+                  </>
+                )}
               </button>
             </div>
           </div>

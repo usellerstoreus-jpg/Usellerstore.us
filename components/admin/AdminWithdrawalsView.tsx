@@ -188,13 +188,15 @@ export function AdminWithdrawalsView({
 
   // Fallback to local sellers or initial seller if prop is empty
   const effectiveSellers = useMemo(() => {
-    if (sellers && sellers.length > 0) return sellers
+    if (sellers && sellers.length > 0) return sellers.filter((s) => !s.isDeleted)
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem('u_all_sellers')
         if (raw) {
           const parsed = JSON.parse(raw)
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.filter((s: SellerProfile) => !s.isDeleted)
+          }
         }
       } catch {}
     }

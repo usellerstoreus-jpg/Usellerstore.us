@@ -40,7 +40,6 @@ import {
   RefreshCw,
   Menu,
   X,
-  Store,
   Check
 } from 'lucide-react'
 
@@ -389,13 +388,6 @@ export default function AdminOrdersPage() {
               <span className="text-[10px] text-purple-300 font-semibold">Orders</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition-colors flex items-center gap-1"
-            onClick={() => router.push('/')}
-          >
-            <Store size={13} /> Storefront
-          </button>
         </div>
 
         <div className="p-4 sm:p-6 max-w-[1400px] mx-auto">

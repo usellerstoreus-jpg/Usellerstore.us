@@ -32,7 +32,6 @@ import {
   Tag,
   CreditCard,
   Lock,
-  Building2,
   PackageCheck,
   Package,
   LogOut,
@@ -735,38 +734,6 @@ export function ShoppingDashboard({
                       <span>Logout</span>
                     </button>
                   </div>
-
-                  {/* Seller Console / Admin Portal Switcher */}
-                  {(onSwitchToSeller || onSwitchToAdmin) && (
-                    <div className="border-t border-slate-100 pt-1 mt-1 space-y-1">
-                      {onSwitchToSeller && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsUserMenuOpen(false)
-                            onSwitchToSeller()
-                          }}
-                          className="w-full text-left px-3 py-1.5 rounded-xl hover:bg-blue-50 font-medium text-blue-700 flex items-center gap-2 cursor-pointer text-[11px]"
-                        >
-                          <Store size={13} />
-                          <span>Seller Console</span>
-                        </button>
-                      )}
-                      {onSwitchToAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsUserMenuOpen(false)
-                            onSwitchToAdmin()
-                          }}
-                          className="w-full text-left px-3 py-1.5 rounded-xl hover:bg-purple-50 font-medium text-purple-700 flex items-center gap-2 cursor-pointer text-[11px]"
-                        >
-                          <Building2 size={13} />
-                          <span>Admin Panel</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
             </div>

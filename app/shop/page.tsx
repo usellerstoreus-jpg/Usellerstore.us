@@ -65,6 +65,71 @@ export default function ShopPage() {
       }
     }
     loadData()
+
+    const handleSellerRemovedAction = (detail: any) => {
+      const removedId = (detail?.id || '').toLowerCase()
+      const removedEmail = (detail?.email || '').toLowerCase()
+      const removedShop = (detail?.shopName || '').toLowerCase()
+
+      // 1. If storefront was showing the removed seller, reload/reset profile
+      setProfile((prev) => {
+        const cId = (prev.id || '').toLowerCase()
+        const cEmail = (prev.email || '').toLowerCase()
+        const cShop = (prev.shopName || '').toLowerCase()
+        if (
+          (removedId && cId === removedId) ||
+          (removedEmail && cEmail === removedEmail) ||
+          (removedShop && cShop === removedShop)
+        ) {
+          showToast('Merchant store was removed. Storefront refreshed.')
+          return initialSellerProfile
+        }
+        return prev
+      })
+
+      // 2. Filter products locally and reload from database
+      setProducts((prev) =>
+        prev.filter((p: any) => {
+          if (removedId && (p.sellerId === removedId || p.id?.includes(removedId))) return false
+          if (removedEmail && p.sellerId === removedEmail) return false
+          if (removedShop && p.sku?.toLowerCase().includes(removedShop)) return false
+          return true
+        })
+      )
+
+      // Re-fetch products from DB to ensure complete sync
+      fetchProducts().then((supaProds) => {
+        if (supaProds) setProducts(supaProds)
+      })
+    }
+
+    const handleCustomEvent = (e: any) => {
+      handleSellerRemovedAction(e.detail)
+    }
+
+    window.addEventListener('u_seller_removed', handleCustomEvent)
+    window.addEventListener('u_products_updated', () => {
+      fetchProducts().then((supaProds) => {
+        if (supaProds) setProducts(supaProds)
+      })
+    })
+
+    let channel: BroadcastChannel | null = null
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        channel = new BroadcastChannel('u_system_sync')
+        channel.onmessage = (event) => {
+          if (event.data?.type === 'SELLER_REMOVED') {
+            handleSellerRemovedAction(event.data.payload)
+          }
+        }
+      }
+    } catch {}
+
+    return () => {
+      window.removeEventListener('u_seller_removed', handleCustomEvent)
+      if (channel) channel.close()
+    }
   }, [])
 
   const handlePlaceOrder = async (newOrder: Order) => {
