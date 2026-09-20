@@ -204,6 +204,8 @@ export function AdminSellersView({
   const [onboardPassword, setOnboardPassword] = useState('')
   const [onboardBalance, setOnboardBalance] = useState('0.00')
   const [onboardGuarantee, setOnboardGuarantee] = useState('0.00')
+  const [onboardIsLimitUnlimited, setOnboardIsLimitUnlimited] = useState(false)
+  const [onboardProductLimit, setOnboardProductLimit] = useState('50')
   const [isOnboarding, setIsOnboarding] = useState(false)
   const [isDeletingStore, setIsDeletingStore] = useState(false)
 
@@ -354,9 +356,16 @@ export function AdminSellersView({
         const active = localStorage.getItem('u_seller_active_profile')
         if (active) {
           const parsed = JSON.parse(active)
-          if (parsed.email === target.email || parsed.id === target.id) {
-            localStorage.setItem('u_seller_active_profile', JSON.stringify(updated))
+          if (parsed.email === target.email || (parsed.id && target.id && parsed.id === target.id)) {
+            const merged = { ...parsed, ...updates }
+            localStorage.setItem('u_seller_active_profile', JSON.stringify(merged))
           }
+        }
+        window.dispatchEvent(new CustomEvent('u_seller_profile_updated', { detail: updated }))
+        if ('BroadcastChannel' in window) {
+          const ch = new BroadcastChannel('u_system_sync')
+          ch.postMessage({ type: 'SELLER_PROFILE_UPDATED', payload: updated })
+          ch.close()
         }
       }
     } catch {}
@@ -419,7 +428,7 @@ export function AdminSellersView({
         isSuspended: false,
         withdrawalsBlocked: false,
         allowProductRemoval: true,
-        productLimit: 'unlimited',
+        productLimit: onboardIsLimitUnlimited ? 'unlimited' : (parseInt(onboardProductLimit, 10) || 50),
         viewsBooster: { enabled: false, multiplier: 1.0, extraDailyViews: 0 },
         password: onboardPassword || 'password123',
         reviewCount: 504,
@@ -450,6 +459,8 @@ export function AdminSellersView({
       setOnboardPassword('')
       setOnboardBalance('0.00')
       setOnboardGuarantee('0.00')
+      setOnboardIsLimitUnlimited(false)
+      setOnboardProductLimit('50')
 
       // Record in platform activity log
       await recordActivityLog({
@@ -1106,6 +1117,32 @@ export function AdminSellersView({
                     ACCOUNT TIER
                   </div>
                 </div>
+
+                {/* Product Upload Limit Decided by Admin */}
+                <div className="flex flex-col items-center">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedSeller(s)
+                      setIsLimitUnlimited(s.productLimit === 'unlimited' || !s.productLimit)
+                      setCustomLimit(typeof s.productLimit === 'number' ? s.productLimit : 50)
+                      setActiveModal('productLimit')
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50/90 border border-purple-200 text-purple-800 text-xs font-bold hover:bg-purple-100 transition-colors cursor-pointer shadow-2xs"
+                    title="Click to configure how many products this seller can upload"
+                  >
+                    <Package size={11} className="text-purple-600" />
+                    <span>
+                      {s.productLimit === 'unlimited' || !s.productLimit
+                        ? 'Unlimited'
+                        : `${s.productLimit} Max`}
+                    </span>
+                  </button>
+                  <div className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase mt-1">
+                    UPLOAD LIMIT
+                  </div>
+                </div>
               </div>
 
               {/* Right Side: Quick Action Button & Financials & Menu matching screenshot */}
@@ -1544,6 +1581,62 @@ export function AdminSellersView({
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                   />
                 </div>
+              </div>
+
+              {/* Product Limit Control (Admin Authority) */}
+              <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-100 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-900">
+                      Product Upload Quota
+                    </label>
+                    <span className="text-[11px] text-slate-500">
+                      Admin decides maximum items this seller can upload
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOnboardIsLimitUnlimited(!onboardIsLimitUnlimited)}
+                    className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
+                      onboardIsLimitUnlimited
+                        ? 'bg-purple-600 text-white border-purple-600'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {onboardIsLimitUnlimited ? 'Unlimited' : 'Fixed Quota'}
+                  </button>
+                </div>
+
+                {!onboardIsLimitUnlimited && (
+                  <div className="space-y-1.5 pt-0.5">
+                    <input
+                      type="number"
+                      min="1"
+                      value={onboardProductLimit}
+                      onChange={(e) => setOnboardProductLimit(e.target.value)}
+                      placeholder="e.g. 50"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                      required
+                    />
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1">Presets:</span>
+                      {['10', '25', '50', '100', '250', '500'].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setOnboardProductLimit(preset)}
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                            onboardProductLimit === preset
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-2">
@@ -2431,9 +2524,9 @@ export function AdminSellersView({
               </div>
 
               {!isLimitUnlimited && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Maximum Number of Products
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Maximum Number of Products Allowed
                   </label>
                   <input
                     type="number"
@@ -2441,10 +2534,35 @@ export function AdminSellersView({
                     value={customLimit}
                     onChange={(e) => setCustomLimit(parseInt(e.target.value) || 1)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-bold"
+                    placeholder="Enter max product listings"
                     required
                   />
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1">Quick Presets:</span>
+                    {[10, 25, 50, 100, 250, 500].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setCustomLimit(preset)}
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold border transition-colors cursor-pointer ${
+                          customLimit === preset
+                            ? 'bg-purple-600 text-white border-purple-600'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              <div className="p-3 bg-purple-50/80 border border-purple-100 rounded-xl text-[11px] text-purple-900 leading-relaxed flex items-start gap-2">
+                <ShieldCheck size={16} className="text-purple-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Admin Authority:</strong> Only administrators can decide and configure how many products a seller can upload. Once saved, this restriction takes effect immediately and prevents the seller from adding listings past this quota.
+                </span>
+              </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-2">
                 <button

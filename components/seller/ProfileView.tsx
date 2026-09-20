@@ -19,7 +19,8 @@ import {
   KeyRound,
   Mail,
   Phone,
-  Globe
+  Globe,
+  Package
 } from 'lucide-react'
 import { SellerProfile } from '@/lib/mock-data'
 
@@ -144,6 +145,13 @@ export function ProfileView({
               )}
               <span className="inline-flex items-center gap-1 bg-slate-800/80 text-amber-300 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-slate-700">
                 {profile.rating.toFixed(1)} <Star size={12} className="fill-amber-400 text-amber-400" />
+              </span>
+              <span
+                className="inline-flex items-center gap-1.5 bg-purple-950/60 text-purple-300 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-purple-800/80"
+                title="Product upload quota is determined and managed exclusively by system administrators"
+              >
+                <Package size={12} className="text-purple-400" />
+                Upload Limit: {profile.productLimit && profile.productLimit !== 'unlimited' ? `${profile.productLimit} Products` : 'Unlimited'}
               </span>
             </div>
 
@@ -279,6 +287,31 @@ export function ProfileView({
           </div>
           <ChevronRight size={18} className="text-slate-400" />
         </button>
+
+        {/* 6. Product Upload Quota (Admin Controlled) */}
+        <div className="w-full flex items-center justify-between p-4 bg-slate-50/50 text-left">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0">
+              <Package size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">Upload Quota</h3>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
+                  <Lock size={10} /> Admin Controlled
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                {profile.productLimit && profile.productLimit !== 'unlimited'
+                  ? `Limit of ${profile.productLimit} active products determined by administrator.`
+                  : 'Unlimited product upload capacity granted by administrator.'}
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-bold px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-purple-700 shadow-2xs">
+            {profile.productLimit && profile.productLimit !== 'unlimited' ? `${profile.productLimit} Max` : 'Unlimited'}
+          </span>
+        </div>
       </div>
 
       {/* Log out Bottom Box */}

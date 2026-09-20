@@ -1660,6 +1660,61 @@ export default function Page() {
     return () => window.removeEventListener('u_support_chat_update', handleSupportChatUpdate)
   }, [profile.email])
 
+  // Real-time synchronization when Admin updates seller settings (like product upload limit)
+  useEffect(() => {
+    const handleProfileUpdateAction = (updated: SellerProfile) => {
+      if (!updated) return
+      setSellers((prev) =>
+        prev.map((s) =>
+          (s.id && updated.id && s.id === updated.id) ||
+          (s.email && updated.email && s.email.toLowerCase() === updated.email.toLowerCase())
+            ? { ...s, ...updated }
+            : s
+        )
+      )
+      setProfile((curr) => {
+        const isTarget =
+          (curr.id && updated.id && curr.id === updated.id) ||
+          (curr.email && updated.email && curr.email.toLowerCase() === updated.email.toLowerCase())
+        if (isTarget) {
+          const merged = { ...curr, ...updated }
+          if (updated.productLimit !== undefined && updated.productLimit !== curr.productLimit) {
+            showToast(
+              updated.productLimit === 'unlimited'
+                ? '📢 Administrator updated your product limit to Unlimited!'
+                : `📢 Administrator updated your product upload limit to ${updated.productLimit} products.`
+            )
+          }
+          return merged
+        }
+        return curr
+      })
+    }
+
+    const handleCustomEvent = (e: any) => {
+      if (e.detail) handleProfileUpdateAction(e.detail)
+    }
+
+    window.addEventListener('u_seller_profile_updated', handleCustomEvent)
+
+    let channel: BroadcastChannel | null = null
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        channel = new BroadcastChannel('u_system_sync')
+        channel.onmessage = (event) => {
+          if (event.data?.type === 'SELLER_PROFILE_UPDATED') {
+            handleProfileUpdateAction(event.data.payload)
+          }
+        }
+      }
+    } catch {}
+
+    return () => {
+      window.removeEventListener('u_seller_profile_updated', handleCustomEvent)
+      if (channel) channel.close()
+    }
+  }, [])
+
   const signOut = async () => {
     await signOutSeller()
     try {
@@ -1712,6 +1767,15 @@ export default function Page() {
       showToast('⚠️ KYC Verification Required: Your store is in View-Only mode until approved.')
       setIsKycModalOpen(true)
       return
+    }
+
+    // Only Admin decides product upload capacity
+    const currentLimit = profile.productLimit
+    if (currentLimit !== undefined && currentLimit !== 'unlimited' && typeof currentLimit === 'number') {
+      if (products.length >= currentLimit) {
+        showToast(`⚠️ Upload Limit Reached: Administrator has set your store upload limit to ${currentLimit} products. Contact Admin to increase your limit.`)
+        return
+      }
     }
 
     const fallbackImage =
@@ -2428,7 +2492,7 @@ export default function Page() {
             {sellerTab === 'Products' && (
               <ProductsView
                 products={products}
-                maxSlots={500}
+                maxSlots={profile.productLimit ?? 'unlimited'}
                 isVerified={Boolean(profile.verified)}
                 onRequireKyc={() => setIsKycModalOpen(true)}
                 onAddProduct={handleAddProduct}

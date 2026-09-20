@@ -46,14 +46,16 @@ interface AdminActivityViewProps {
   onSwitchToSeller?: (seller?: SellerProfile) => void
 }
 
-export function AdminActivityView({
-  sellers = [],
-  products = [],
-  activeTab = 'Recent Actions',
-  onOpenMobileMenu,
-  onToast = () => {},
-  onSwitchToSeller,
-}: AdminActivityViewProps) {
+export function AdminActivityView(props: AdminActivityViewProps) {
+  const {
+    sellers = [],
+    products = [],
+    activeTab = 'Recent Actions',
+    onOpenMobileMenu,
+    onToast = () => {},
+    onSwitchToSeller,
+  } = props
+
   if (activeTab === 'Recent Actions') {
     return (
       <RecentActionsView
@@ -76,6 +78,17 @@ export function AdminActivityView({
     )
   }
 
+  return <AdminSystemLogsView {...props} />
+}
+
+function AdminSystemLogsView({
+  sellers = [],
+  products = [],
+  activeTab = 'Recent Actions',
+  onOpenMobileMenu,
+  onToast = () => {},
+  onSwitchToSeller,
+}: AdminActivityViewProps) {
   const [logs, setLogs] = useState<ActivityLogItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')

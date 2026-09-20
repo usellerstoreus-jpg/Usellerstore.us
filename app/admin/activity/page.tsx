@@ -62,6 +62,27 @@ export default function AdminActivityPage() {
     setTimeout(() => setToast(''), 2800)
   }
 
+  const handleSwitchToSeller = (s?: SellerProfile) => {
+    if (s) {
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('u_seller_active_profile', JSON.stringify(s))
+          localStorage.setItem(
+            'u_auth_session',
+            JSON.stringify({
+              role: 'seller',
+              profile: s,
+              email: s.email,
+              shopName: s.shopName,
+              ownerName: s.ownerName,
+            })
+          )
+        }
+      } catch {}
+    }
+    router.push('/?mode=seller')
+  }
+
   useEffect(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -246,26 +267,7 @@ export default function AdminActivityPage() {
             activeTab={activeTab}
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             onToast={showToast}
-            onSwitchToSeller={(s) => {
-              if (s) {
-                try {
-                  if (typeof window !== 'undefined') {
-                    localStorage.setItem('u_seller_active_profile', JSON.stringify(s))
-                    localStorage.setItem(
-                      'u_auth_session',
-                      JSON.stringify({
-                        role: 'seller',
-                        profile: s,
-                        email: s.email,
-                        shopName: s.shopName,
-                        ownerName: s.ownerName,
-                      })
-                    )
-                  }
-                } catch {}
-              }
-              router.push('/?mode=seller')
-            }}
+            onSwitchToSeller={handleSwitchToSeller}
           />
         </div>
       </main>

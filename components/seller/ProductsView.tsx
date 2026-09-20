@@ -12,14 +12,17 @@ import {
   Check,
   X,
   ExternalLink,
-  Layers
+  Layers,
+  Lock,
+  ShieldAlert,
+  AlertCircle
 } from 'lucide-react'
 import { Product } from '@/lib/mock-data'
 import { ProductImageUploader } from './ProductImageUploader'
 
 interface ProductsViewProps {
   products: Product[]
-  maxSlots?: number
+  maxSlots?: number | 'unlimited'
   isVerified?: boolean
   onRequireKyc?: () => void
   onAddProduct: (product: Omit<Product, 'id'>) => void
@@ -30,7 +33,7 @@ interface ProductsViewProps {
 
 export function ProductsView({
   products,
-  maxSlots = 500,
+  maxSlots = 'unlimited',
   isVerified = true,
   onRequireKyc,
   onAddProduct,
@@ -38,6 +41,9 @@ export function ProductsView({
   onDeleteProduct,
   onToast,
 }: ProductsViewProps) {
+  const isUnlimited = maxSlots === 'unlimited' || maxSlots === undefined
+  const numericLimit = typeof maxSlots === 'number' ? maxSlots : null
+  const isLimitReached = numericLimit !== null && products.length >= numericLimit
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -91,6 +97,10 @@ export function ProductsView({
       if (onRequireKyc) onRequireKyc()
       return
     }
+    if (isLimitReached) {
+      onToast(`⚠️ Upload Limit Reached: Administrator has set your store upload limit to ${numericLimit} products. Only an admin can increase this limit.`)
+      return
+    }
     setFormData({
       title: '',
       category: 'Home & Kitchen',
@@ -106,6 +116,10 @@ export function ProductsView({
 
   const handleSaveNewProduct = (e: React.FormEvent) => {
     e.preventDefault()
+    if (isLimitReached) {
+      onToast(`⚠️ Cannot add product: Your store upload limit of ${numericLimit} products set by Administrator has been reached.`)
+      return
+    }
     if (!formData.title.trim()) {
       onToast('Please enter a product title')
       return
@@ -170,7 +184,15 @@ export function ProductsView({
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">My Products</h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-            <span className="font-semibold text-slate-700">{products.length}</span> of {maxSlots} slots used
+            <span className="font-semibold text-slate-700">{products.length}</span>{' '}
+            {isUnlimited ? (
+              <span>products listed <span className="text-emerald-600 font-semibold">(Unlimited quota)</span></span>
+            ) : (
+              <span>
+                of <span className="font-bold text-purple-700">{numericLimit}</span> slots used{' '}
+                <span className="text-slate-400 text-xs">(Admin limit)</span>
+              </span>
+            )}
           </p>
         </div>
 
@@ -180,17 +202,38 @@ export function ProductsView({
               View-Only Mode
             </span>
           )}
+          {isLimitReached && (
+            <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-xs font-bold uppercase tracking-wider flex items-center gap-1 shadow-2xs">
+              <Lock size={12} /> Limit Reached ({numericLimit})
+            </span>
+          )}
           <button
             type="button"
             id="add-products-header-btn"
-            className="add-product-btn flex items-center justify-center gap-2 bg-[#5e7793] hover:bg-[#4d647e] text-white font-medium px-4 py-2.5 rounded-lg shadow-sm transition-all w-full sm:w-auto cursor-pointer"
+            className={`add-product-btn flex items-center justify-center gap-2 text-white font-medium px-4 py-2.5 rounded-lg shadow-sm transition-all w-full sm:w-auto cursor-pointer ${
+              isLimitReached ? 'bg-slate-400 hover:bg-slate-500' : 'bg-[#5e7793] hover:bg-[#4d647e]'
+            }`}
             onClick={openAddModal}
+            title={isLimitReached ? `Upload limit of ${numericLimit} products reached (Set by Administrator)` : 'Add products'}
           >
             <Plus size={18} />
             <span>Add products</span>
           </button>
         </div>
       </div>
+
+      {/* Admin Limit Reached Banner */}
+      {isLimitReached && (
+        <div className="mb-5 p-3.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs flex items-start gap-2.5 shadow-2xs">
+          <ShieldAlert size={18} className="text-purple-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <strong className="block font-bold">Admin Upload Limit Reached ({products.length}/{numericLimit} products)</strong>
+            <span className="text-purple-700">
+              Only the administrator can configure how many products your store can upload. To list more products, please request a quota increase from the admin.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="products-toolbar flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between mb-6 bg-white p-3.5 rounded-xl border border-slate-200">
