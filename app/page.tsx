@@ -102,7 +102,6 @@ import {
   signUpSeller,
   signInSeller,
   signOutSeller,
-  signInAdmin,
   resetPassword,
   AdminUser,
 } from '@/lib/supabase/api'
@@ -703,12 +702,9 @@ function AuthScreen({
   onToast,
 }: {
   onLoginSuccess: (profile: SellerProfile) => void
-  onAdminSuccess: (admin: AdminUser) => void
+  onAdminSuccess?: (admin: AdminUser) => void
   onToast: (msg: string) => void
 }) {
-  // Top level role portal: 'seller' | 'admin'
-  const [rolePortal, setRolePortal] = useState<'seller' | 'admin'>('seller')
-
   // Seller sub-mode: 'signin' | 'signup' | 'forgot'
   const [sellerAuthMode, setSellerAuthMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
 
@@ -723,11 +719,6 @@ function AuthScreen({
   const [signUpEmail, setSignUpEmail] = useState('')
   const [signUpPassword, setSignUpPassword] = useState('')
   const [showSignUpPassword, setShowSignUpPassword] = useState(false)
-
-  // Admin Login fields
-  const [adminEmail, setAdminEmail] = useState('admin@usellerstore.com')
-  const [adminPassword, setAdminPassword] = useState('admin123')
-  const [showAdminPassword, setShowAdminPassword] = useState(false)
 
   // Password Recovery fields
   const [forgotEmail, setForgotEmail] = useState('')
@@ -900,64 +891,6 @@ function AuthScreen({
     }
   }
 
-  // Admin Sign In Handler
-  const handleAdminSignIn = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    setErrorMessage('')
-    setSuccessMessage('')
-
-    if (!adminEmail.trim()) {
-      setErrorMessage('Please enter administrator email address')
-      return
-    }
-    if (!adminPassword) {
-      setErrorMessage('Please enter administrator password')
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      const res = await signInAdmin({
-        email: adminEmail,
-        password: adminPassword,
-      })
-
-      if (res.success && res.admin) {
-        onToast('Administrator authentication confirmed!')
-        try {
-          const [device, location] = await Promise.all([
-            Promise.resolve(getDeviceDetails()),
-            getLocationDetails(),
-          ])
-          await recordActivityLog({
-            action: 'admin_login',
-            category: 'seller_logins',
-            logType: 'login',
-            title: 'Signed in',
-            description: `Administrator ${adminEmail} signed in from ${location.formatted}.`,
-            user: {
-              name: res.admin.name || 'Administrator',
-              email: adminEmail,
-              role: 'admin',
-              avatar: 'A',
-            },
-            location,
-            device,
-            status: 'success',
-            isThisDevice: true,
-          })
-        } catch {}
-        onAdminSuccess(res.admin)
-      } else {
-        setErrorMessage(res.error || 'Access denied: Invalid administrator credentials.')
-      }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error connecting to admin authentication.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   // Password Recovery Handler
   const handleForgotPassword = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
@@ -1009,7 +942,7 @@ function AuthScreen({
               <Check size={16} /> Multi-user authentication
             </span>
             <span>
-              <Check size={16} /> Admin oversight console
+              <Check size={16} /> Verified merchant portal
             </span>
             <span>
               <Check size={16} /> Real-time database
@@ -1029,37 +962,6 @@ function AuthScreen({
             <BrandLogo size="md" />
           </div>
 
-          {/* Main Role Selector Pill: Seller vs Admin */}
-          <div className="flex bg-slate-200/80 p-1 rounded-xl mb-5 text-xs font-bold">
-            <button
-              type="button"
-              className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                rolePortal === 'seller' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              onClick={() => {
-                setRolePortal('seller')
-                setErrorMessage('')
-                setSuccessMessage('')
-                if (sellerAuthMode === 'forgot') setSellerAuthMode('signin')
-              }}
-            >
-              <Store size={14} /> Merchant Seller
-            </button>
-            <button
-              type="button"
-              className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                rolePortal === 'admin' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              onClick={() => {
-                setRolePortal('admin')
-                setErrorMessage('')
-                setSuccessMessage('')
-              }}
-            >
-              <ShieldCheck size={14} /> Admin Access
-            </button>
-          </div>
-
           {/* Feedback Banners */}
           {errorMessage && (
             <div className="auth-error-banner" role="alert">
@@ -1076,8 +978,6 @@ function AuthScreen({
           )}
 
           {/* SELLER PORTAL */}
-          {rolePortal === 'seller' ? (
-            <>
               {sellerAuthMode === 'forgot' ? (
                 /* FORGOT PASSWORD FORM */
                 <form onSubmit={handleForgotPassword}>
@@ -1434,115 +1334,6 @@ function AuthScreen({
                   )}
                 </>
               )}
-            </>
-          ) : (
-            /* ADMINISTRATOR PORTAL */
-            <form onSubmit={handleAdminSignIn}>
-              <div className="form-intro">
-                <span className="form-icon" style={{ background: '#f5f3ff', color: '#7c3aed' }}>
-                  <ShieldCheck size={20} />
-                </span>
-                <span className="eyebrow text-purple-600 font-bold">RESTRICTED ACCESS</span>
-                <h2>Admin Management Portal</h2>
-                <p>Sign in with your master credentials to manage sellers and transactions.</p>
-              </div>
-
-              <div className="auth-field-group">
-                <label className="auth-label" htmlFor="admin-email">Administrator Email</label>
-                <div className="auth-input-box">
-                  <Mail size={17} className="auth-input-icon" />
-                  <input
-                    id="admin-email"
-                    type="email"
-                    className="auth-input"
-                    placeholder="admin@usellerstore.com"
-                    required
-                    autoComplete="email"
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="auth-field-group">
-                <label className="auth-label" htmlFor="admin-password">Master Password</label>
-                <div className="auth-input-box">
-                  <Lock size={17} className="auth-input-icon" />
-                  <input
-                    id="admin-password"
-                    type={showAdminPassword ? 'text' : 'password'}
-                    className="auth-input"
-                    placeholder="Enter administrator password"
-                    required
-                    autoComplete="current-password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="auth-toggle-visibility"
-                    onClick={() => setShowAdminPassword(!showAdminPassword)}
-                    aria-label={showAdminPassword ? 'Hide password' : 'Show password'}
-                    title={showAdminPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showAdminPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="form-row">
-                <label className="remember">
-                  <input type="checkbox" defaultChecked /> Remember admin session
-                </label>
-                <button
-                  type="button"
-                  className="forgot"
-                  onClick={() => {
-                    setForgotEmail(adminEmail)
-                    setIsForgotSubmitted(false)
-                    setErrorMessage('')
-                    setSuccessMessage('')
-                    setRolePortal('seller')
-                    setSellerAuthMode('forgot')
-                  }}
-                >
-                  Forgot password?
-                </button>
-              </div>
-
-              <button
-                type="submit"
-                className="login-submit"
-                disabled={isLoading}
-                style={{ background: '#1e1b4b', marginTop: '10px' }}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    <span>Verifying credentials...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Enter Management Console</span> <ArrowUpRight size={17} />
-                  </>
-                )}
-              </button>
-
-              <p className="login-foot" style={{ marginTop: '16px' }}>
-                <button
-                  type="button"
-                  className="text-purple-700 font-semibold"
-                  onClick={() => {
-                    setAdminEmail('admin@usellerstore.com')
-                    setAdminPassword('admin123')
-                    onToast('Admin credentials filled')
-                  }}
-                >
-                  Fill Admin Demo Credentials (admin@usellerstore.com)
-                </button>
-              </p>
-            </form>
-          )}
 
         </div>
       </div>
