@@ -244,10 +244,13 @@ export default function AdminOrdersPage() {
 
     try {
       if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('u_seller_notifications')
+        const stored = localStorage.getItem('u_all_notifications') || localStorage.getItem('u_seller_notifications')
         const list = stored ? JSON.parse(stored) : []
-        localStorage.setItem('u_seller_notifications', JSON.stringify([newNotif, ...list]))
+        const updated = [newNotif, ...list]
+        localStorage.setItem('u_all_notifications', JSON.stringify(updated))
+        localStorage.setItem('u_seller_notifications', JSON.stringify(updated))
         window.dispatchEvent(new CustomEvent('u_seller_notifications_update', { detail: { notification: newNotif } }))
+        window.dispatchEvent(new CustomEvent('u_admin_notifications_update', { detail: { notification: newNotif } }))
       }
     } catch {}
     createNotification(newNotif).catch(() => {})
@@ -340,11 +343,15 @@ export default function AdminOrdersPage() {
                       router.push('/admin/sellers')
                     } else if (label === 'KYC') {
                       router.push('/admin/kyc')
+                    } else if (label === 'Orders') {
+                      // Already here
                     } else if (label === 'Support') {
                       router.push('/admin/support')
+                    } else if (label === 'Withdrawals') {
+                      router.push('/admin/withdrawals')
                     } else if (label === 'Recent Actions' || label === 'My Logs') {
                       router.push(`/admin/activity?tab=${encodeURIComponent(label)}`)
-                    } else if (label !== 'Orders') {
+                    } else {
                       router.push(`/?mode=admin&tab=${label}`)
                     }
                   }}

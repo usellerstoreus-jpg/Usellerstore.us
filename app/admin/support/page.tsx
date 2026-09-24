@@ -194,6 +194,8 @@ export default function AdminSupportPage() {
                       router.push('/admin/kyc')
                     } else if (label === 'Support') {
                       // Already here
+                    } else if (label === 'Withdrawals') {
+                      router.push('/admin/withdrawals')
                     } else if (label === 'Recent Actions' || label === 'My Logs') {
                       router.push(`/admin/activity?tab=${encodeURIComponent(label)}`)
                     } else {

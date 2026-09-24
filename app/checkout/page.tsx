@@ -8,7 +8,7 @@ import {
   initialSellerProfile,
   Product,
   Order,
-  SellerProfile
+  SellerProfile,
 } from '@/lib/mock-data'
 import {
   fetchProducts,
@@ -19,7 +19,7 @@ import {
 import { isSupabaseConfigured } from '@/lib/supabase/client'
 import { Check, X } from 'lucide-react'
 
-export default function ShopPage() {
+export default function CheckoutPage() {
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [profile, setProfile] = useState<SellerProfile>(initialSellerProfile)
@@ -54,102 +54,33 @@ export default function ShopPage() {
           fetchProducts(),
           fetchSellerProfile(),
         ])
-        if (supaProds) {
+        if (supaProds && supaProds.length > 0) {
           setProducts(supaProds)
         }
         if (supaProfile) {
           setProfile(supaProfile)
         }
       } catch (err) {
-        console.warn('Failed to load shop data from Supabase:', err)
+        console.warn('Failed to load checkout data from Supabase:', err)
       }
     }
     loadData()
-
-    const handleSellerRemovedAction = (detail: any) => {
-      const removedId = (detail?.id || '').toLowerCase()
-      const removedEmail = (detail?.email || '').toLowerCase()
-      const removedShop = (detail?.shopName || '').toLowerCase()
-
-      // 1. If storefront was showing the removed seller, reload/reset profile
-      setProfile((prev) => {
-        const cId = (prev.id || '').toLowerCase()
-        const cEmail = (prev.email || '').toLowerCase()
-        const cShop = (prev.shopName || '').toLowerCase()
-        if (
-          (removedId && cId === removedId) ||
-          (removedEmail && cEmail === removedEmail) ||
-          (removedShop && cShop === removedShop)
-        ) {
-          showToast('Merchant store was removed. Storefront refreshed.')
-          return initialSellerProfile
-        }
-        return prev
-      })
-
-      // 2. Filter products locally and reload from database
-      setProducts((prev) =>
-        prev.filter((p: any) => {
-          if (removedId && (p.sellerId === removedId || p.id?.includes(removedId))) return false
-          if (removedEmail && p.sellerId === removedEmail) return false
-          if (removedShop && p.sku?.toLowerCase().includes(removedShop)) return false
-          return true
-        })
-      )
-
-      // Re-fetch products from DB to ensure complete sync
-      fetchProducts().then((supaProds) => {
-        if (supaProds) setProducts(supaProds)
-      })
-    }
-
-    const handleCustomEvent = (e: any) => {
-      handleSellerRemovedAction(e.detail)
-    }
-
-    window.addEventListener('u_seller_removed', handleCustomEvent)
-    window.addEventListener('u_products_updated', () => {
-      fetchProducts().then((supaProds) => {
-        if (supaProds) setProducts(supaProds)
-      })
-    })
-
-    let channel: BroadcastChannel | null = null
-    try {
-      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-        channel = new BroadcastChannel('u_system_sync')
-        channel.onmessage = (event) => {
-          if (event.data?.type === 'SELLER_REMOVED') {
-            handleSellerRemovedAction(event.data.payload)
-          }
-        }
-      }
-    } catch {}
-
-    return () => {
-      window.removeEventListener('u_seller_removed', handleCustomEvent)
-      if (channel) channel.close()
-    }
   }, [])
 
-  const handlePlaceOrder = async (newOrder: Order) => {
-    // 1. Save to Database (calls /api/orders and Supabase)
-    const saved = await createOrder(newOrder)
-    const activeOrder = saved || newOrder
+  const handlePlaceOrder = async (orderData: Order) => {
+    let activeOrder = { ...orderData }
 
-    // 2. Decrement local product stock
-    setProducts((prev) =>
-      prev.map((p) => {
-        const item = newOrder.items.find((i) => i.productTitle.toLowerCase().includes(p.title.slice(0, 25).toLowerCase()))
-        if (item) {
-          const newStock = Math.max(0, p.stock - item.quantity)
-          return { ...p, stock: newStock, status: newStock === 0 ? 'out_of_stock' : p.status }
+    if (isSupabaseConfigured()) {
+      try {
+        const savedOrder = await createOrder(activeOrder)
+        if (savedOrder) {
+          activeOrder = savedOrder
         }
-        return p
-      })
-    )
+      } catch (err) {
+        console.warn('Could not save order in Supabase:', err)
+      }
+    }
 
-    // 3. Update local seller balance and orders
     const newBalance = Number((profile.balance + Number(activeOrder.profit || 0)).toFixed(2))
     const newTotalOrders = profile.totalOrders + 1
 
@@ -163,12 +94,14 @@ export default function ShopPage() {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem('u_seller_active_profile', JSON.stringify(updatedProfile))
-        // Append to cached orders
         const savedOrders = localStorage.getItem('u_seller_orders')
         const ordersList = savedOrders ? JSON.parse(savedOrders) : []
         localStorage.setItem(
           'u_seller_orders',
-          JSON.stringify([activeOrder, ...ordersList.filter((o: Order) => o.id !== activeOrder.id && o.orderNumber !== activeOrder.orderNumber)])
+          JSON.stringify([
+            activeOrder,
+            ...ordersList.filter((o: Order) => o.id !== activeOrder.id && o.orderNumber !== activeOrder.orderNumber),
+          ])
         )
 
         // Create seller notification
@@ -195,7 +128,7 @@ export default function ShopPage() {
     }
 
     await updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders })
-    showToast(`Order ${activeOrder.orderNumber} successfully saved and recorded in database!`)
+    showToast(`Order ${activeOrder.id || activeOrder.orderNumber} successfully placed!`)
   }
 
   return (
@@ -203,7 +136,7 @@ export default function ShopPage() {
       <ShoppingDashboard
         products={products}
         sellerProfile={profile}
-        initialNavTab="shop"
+        initialNavTab="checkout"
         onPlaceOrder={handlePlaceOrder}
         onSwitchToLogin={() => router.push('/?mode=login')}
         onSwitchToSignUp={() => router.push('/?mode=login&tab=signup')}

@@ -6,6 +6,8 @@ export interface Product {
   sell: number
   profit: number
   image: string
+  images?: string[]
+  description?: string
   stock: number
   sku: string
   status: 'active' | 'draft' | 'out_of_stock'
@@ -45,6 +47,16 @@ export interface NotificationItem {
   type: 'kyc' | 'order' | 'system' | 'payout'
   read: boolean
   details?: string
+  category?: 'order' | 'store' | 'product' | 'kyc' | 'payout' | 'system' | 'security' | 'seller'
+  targetRole?: 'seller' | 'admin' | 'shop' | 'all'
+  sellerId?: string
+  sellerEmail?: string
+  shopName?: string
+  productId?: string
+  productImage?: string
+  productPrice?: number
+  promoCode?: string
+  badgeText?: string
 }
 
 export interface KycSubmission {
@@ -263,12 +275,24 @@ export const masterCatalogProducts: Product[] = [
   },
   {
     id: 'prod-10',
-    title: 'PetSafe Wireless Pet Containment System - Electric Underground Boundary Kit',
-    category: 'Pet Supplies',
+    title: 'PetSafe Wireless Pet Containment System',
+    category: 'Electronics',
     cost: 128.81,
     sell: 166.46,
     profit: 37.65,
-    image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=500&q=80',
+    originalPrice: 199.99,
+    discountPercent: 17,
+    rating: 4.5,
+    reviewCount: 241,
+    image: '/products/petsafe_collar_main.jpg',
+    images: [
+      '/products/petsafe_kit_box.jpg',
+      '/products/petsafe_dog_yard.jpg',
+      '/products/petsafe_wireless_fence.jpg',
+      '/products/petsafe_dog_portrait.jpg',
+      '/products/petsafe_collar_main.jpg',
+    ],
+    description: "The PetSafe Wireless Pet Containment System is a reliable, portable pet containment system that uses advanced wireless fence technology to create a secure, invisible boundary perimeter without digging. The circular boundary can be adjusted to cover up to 1/2 of an acre, offering a flexible and accurate wireless fence solution that sets up in just 1~2 hours. Simply plug the training transmitter in inside, place the included boundary flags, and customize the range to suit your yard or travel destination, perfect for RV trips or vacation homes. The included waterproof receiver collar features a tone-only mode and five adjustable static correction levels, making it easy to tailor the training to your dog's temperament. Static-free reentry further reinforces positive behavior. The collar operates on a replaceable RFA-67 battery, which lasts 1-2 months, and includes a battery status indicator for added convenience. This adjustable collar is intended for dogs at least 6 months old weighing 8lbs+ and fits neck sizes from 6-28 inches. This multi-pet training system supports additional collars, allowing all your pets to enjoy the yard safely. The PetSafe Stay & Play Wireless Fence delivers a reliable, expert-recommended way to keep your pets safe, happy, and free to play.",
     stock: 11,
     sku: 'PS-PET-SYSWIR',
     status: 'active',
@@ -441,9 +465,191 @@ export const masterCatalogProducts: Product[] = [
     sku: 'CRV-MST-CRM16',
     status: 'active',
   },
+  {
+    id: 'prod-25',
+    title: 'Samsung 85 Inch Neo QLED TV',
+    category: 'Electronics',
+    cost: 5100.00,
+    sell: 6469.00,
+    originalPrice: 7520.00,
+    profit: 1369.00,
+    discountPercent: 14,
+    rating: 4.8,
+    reviewCount: 68,
+    image: '/products/samsung_qled_tv.jpg',
+    stock: 14,
+    sku: 'SAM-QLED-85',
+    status: 'active',
+  },
+  {
+    id: 'prod-26',
+    title: 'VIPERTEK VTS-880 Mini Stun Gun for Self Defense...',
+    category: 'Electronics',
+    cost: 6.50,
+    sell: 10.99,
+    profit: 4.49,
+    rating: 4.5,
+    reviewCount: 113,
+    image: '/products/vipertek_stun_gun.jpg',
+    stock: 92,
+    sku: 'VIP-STUN-880',
+    status: 'active',
+  },
+  {
+    id: 'prod-27',
+    title: 'SWEETFULL SWEETFULL Portable Handheld Mini Fan with LED...',
+    category: 'Electronics',
+    cost: 8.00,
+    sell: 12.99,
+    originalPrice: 15.99,
+    discountPercent: 19,
+    profit: 4.99,
+    rating: 4.2,
+    reviewCount: 88,
+    image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=500&q=80',
+    stock: 64,
+    sku: 'SWT-FAN-LED',
+    status: 'active',
+  },
+  {
+    id: 'prod-28',
+    title: 'JISULIFE JISULIFE 3 IN 1 Handheld Mini Fan',
+    category: 'Electronics',
+    cost: 9.10,
+    sell: 13.76,
+    originalPrice: 16.29,
+    discountPercent: 16,
+    profit: 4.66,
+    rating: 4.5,
+    reviewCount: 82,
+    image: 'https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=500&q=80',
+    stock: 80,
+    sku: 'JIS-FAN-3IN1',
+    status: 'active',
+  },
+  {
+    id: 'prod-29',
+    title: 'Universal Wall Mount Storage Organizer for...',
+    category: 'Home & Kitchen',
+    cost: 7.20,
+    sell: 11.99,
+    profit: 4.79,
+    rating: 4.2,
+    reviewCount: 152,
+    image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=500&q=80',
+    stock: 45,
+    sku: 'ORG-WALL-MNT',
+    status: 'active',
+  },
+  {
+    id: 'prod-30',
+    title: 'TONULAX Solar Garden Lights',
+    category: 'Home & Kitchen',
+    cost: 8.50,
+    sell: 13.41,
+    originalPrice: 16.99,
+    discountPercent: 21,
+    profit: 4.91,
+    rating: 4.5,
+    reviewCount: 128,
+    image: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=500&q=80',
+    stock: 110,
+    sku: 'TNX-SOL-GARD',
+    status: 'active',
+  },
+  {
+    id: 'prod-31',
+    title: 'Ring Outdoor Cam Plus',
+    category: 'Electronics',
+    cost: 68.00,
+    sell: 99.99,
+    profit: 31.99,
+    rating: 4.3,
+    reviewCount: 249,
+    image: '/products/ring_outdoor_cam.jpg',
+    stock: 55,
+    sku: 'RNG-CAM-PLUS',
+    status: 'active',
+  },
+  {
+    id: 'prod-32',
+    title: 'WYZE Bulb Cam Security Camera',
+    category: 'Electronics',
+    cost: 32.00,
+    sell: 49.98,
+    profit: 17.98,
+    rating: 4.2,
+    reviewCount: 90,
+    image: '/products/wyze_bulb_cam.jpg',
+    stock: 70,
+    sku: 'WYZ-BLB-CAM',
+    status: 'active',
+  },
+  {
+    id: 'prod-33',
+    title: 'Outdoor String Lights Patio LED',
+    category: 'Electronics',
+    cost: 8.50,
+    sell: 14.99,
+    originalPrice: 23.99,
+    discountPercent: 37,
+    profit: 6.49,
+    rating: 4.0,
+    reviewCount: 1,
+    image: '/products/outdoor_string_lights.jpg',
+    stock: 130,
+    sku: 'STR-LGT-PATIO',
+    status: 'active',
+  },
+  {
+    id: 'prod-34',
+    title: 'Bionic Flood Light 2 Pk Solar Lights Outdoor Waterproof',
+    category: 'Electronics',
+    cost: 16.00,
+    sell: 26.99,
+    originalPrice: 39.95,
+    discountPercent: 32,
+    profit: 10.99,
+    rating: 4.5,
+    reviewCount: 233,
+    image: '/products/bionic_flood_light.jpg',
+    stock: 42,
+    sku: 'BNC-FLD-2PK',
+    status: 'active',
+  },
+  {
+    id: 'prod-35',
+    title: 'GOOTOP Bug Zapper Outdoor',
+    category: 'Electronics',
+    cost: 21.00,
+    sell: 35.99,
+    originalPrice: 59.99,
+    discountPercent: 40,
+    profit: 14.99,
+    rating: 4.7,
+    reviewCount: 295,
+    image: 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?auto=format&fit=crop&w=500&q=80',
+    stock: 38,
+    sku: 'GTP-BUG-ZAP',
+    status: 'active',
+  },
+  {
+    id: 'prod-36',
+    title: 'Bell+Howell Bionic Spotlight Motion Solar Spot Lights...',
+    category: 'Electronics',
+    cost: 10.50,
+    sell: 17.99,
+    profit: 7.49,
+    rating: 4.5,
+    reviewCount: 242,
+    image: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=500&q=80',
+    stock: 85,
+    sku: 'BLH-BNC-SPOT',
+    status: 'active',
+  },
 ]
 
-export const initialProducts: Product[] = []
+export const initialProducts: Product[] = masterCatalogProducts
 
 export const initialOrders: Order[] = []
 

@@ -1775,15 +1775,17 @@ export async function signInAdmin(params: {
     (cleanEmail === 'admin@usellerstore.com' ||
       cleanEmail === 'admin@usellerstore.us' ||
       cleanEmail === 'admin' ||
-      cleanEmail === 'zain@admin.com') &&
-    (password === 'admin123' || password === 'admin' || password === 'password123' || password === '••••••••')
+      cleanEmail === 'zain@admin.com' ||
+      cleanEmail === 'zain') &&
+    (password === 'admin123' || password === 'admin' || password === 'password123' || password === '••••••••' || password === 'zain' || password === 'zain123')
 
   if (isDefaultAdmin) {
+    const isZain = cleanEmail.includes('zain')
     const adminUser: AdminUser = {
-      email: cleanEmail.includes('@') ? cleanEmail : 'admin@usellerstore.com',
-      name: 'Super Administrator',
+      email: cleanEmail.includes('@') ? cleanEmail : (isZain ? 'zain@admin.com' : 'admin@usellerstore.com'),
+      name: isZain ? 'zain' : 'Super Administrator',
       role: 'admin',
-      avatar: 'A',
+      avatar: isZain ? 'Z' : 'A',
       permissions: ['all', 'manage_sellers', 'manage_orders', 'kyc_review', 'withdrawals'],
     }
     return { success: true, admin: adminUser }

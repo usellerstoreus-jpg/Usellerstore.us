@@ -14,7 +14,8 @@ import {
   Boxes,
   Star,
   Sparkles,
-  CreditCard
+  CreditCard,
+  Store,
 } from 'lucide-react'
 import { Product, Order, SellerProfile } from '@/lib/mock-data'
 
@@ -35,6 +36,7 @@ export function DashboardView({
   orders,
   onNavigate,
   onOpenBalanceModal,
+  onOpenStorefront,
 }: DashboardViewProps) {
   // Financial calculations from live state: Only delivered orders credit profit to dashboard
   const deliveredOrdersList = orders.filter((o) => o.status === 'delivered')
@@ -186,6 +188,18 @@ export function DashboardView({
             <ArrowUpRight size={14} />
             <span>Withdraw</span>
           </button>
+
+          {onOpenStorefront && (
+            <button
+              type="button"
+              id="dashboard-open-storefront-btn"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white text-slate-900 hover:bg-slate-100 text-xs font-bold transition-all shadow-xs cursor-pointer"
+              onClick={onOpenStorefront}
+            >
+              <Store size={14} className="text-blue-600" />
+              <span>View storefront</span>
+            </button>
+          )}
         </div>
       </section>
 

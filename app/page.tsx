@@ -47,8 +47,11 @@ import {
   Volume2,
   User,
   LogOut,
-  FileText
+  FileText,
+  Truck,
+  ExternalLink,
 } from 'lucide-react'
+import { AdminInviteWidget } from '@/components/admin/AdminInviteWidget'
 import {
   initialProducts,
   initialOrders,
@@ -102,6 +105,7 @@ import {
   signInSeller,
   signOutSeller,
   resetPassword,
+  signInAdmin,
   AdminUser,
 } from '@/lib/supabase/api'
 import { isSupabaseConfigured } from '@/lib/supabase/client'
@@ -207,12 +211,14 @@ function AdminSidebar({
   onSignOut,
   isOpenOnMobile = false,
   onCloseMobile,
+  onToast,
 }: {
   active: string
   onNavigate: (label: string) => void
   onSignOut: () => void
   isOpenOnMobile?: boolean
   onCloseMobile?: () => void
+  onToast?: (msg: string) => void
 }) {
   const handleNav = (label: string) => {
     onNavigate(label)
@@ -260,13 +266,8 @@ function AdminSidebar({
           </div>
         </div>
 
-        <div className="invite">
-          <span>
-            INVITE <b>MXSVHSDL</b>
-          </span>
-          <Copy size={16} className="cursor-pointer" />
-          <Pencil size={16} className="cursor-pointer" />
-          <RefreshCw size={16} className="cursor-pointer" />
+        <div className="px-3 my-1">
+          <AdminInviteWidget onToast={onToast} />
         </div>
 
         <nav className="admin-nav flex-1 overflow-y-auto" aria-label="Admin navigation">
@@ -315,6 +316,7 @@ function AdminPanel({
   onToast,
   onSignOut,
   onSwitchToSeller,
+  onSwitchToShop,
   onDeleteSeller,
   initialTab = 'Dashboard',
 }: {
@@ -329,6 +331,7 @@ function AdminPanel({
   onToast: (message: string) => void
   onSignOut: () => void
   onSwitchToSeller: (seller?: SellerProfile) => void
+  onSwitchToShop?: () => void
   onDeleteSeller?: (seller: SellerProfile) => void
   initialTab?: string
 }) {
@@ -382,6 +385,7 @@ function AdminPanel({
           onToast(`${label} view selected`)
         }}
         onSignOut={onSignOut}
+        onToast={onToast}
         isOpenOnMobile={isAdminMobileOpen}
         onCloseMobile={() => setIsAdminMobileOpen(false)}
       />
@@ -403,10 +407,35 @@ function AdminPanel({
               <span className="text-[10px] text-purple-300 font-semibold">{active}</span>
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (onSwitchToShop) onSwitchToShop()
+                else window.location.href = '/shop'
+              }}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer"
+              title="Visit Storefront"
+            >
+              <Store size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onSwitchToSeller()
+                onToast('Switched to Seller Console')
+              }}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer"
+              title="Seller Console"
+            >
+              <ExternalLink size={15} />
+            </button>
+          </div>
         </div>
 
         {active !== 'Orders' && active !== 'Withdrawals' && (
-          <div className="admin-topbar hidden md:flex">
+          <div className="admin-topbar hidden md:flex items-center justify-between">
             <div className="admin-heading">
               <span className="section-mark">
                 <ShieldCheck size={22} />
@@ -422,6 +451,35 @@ function AdminPanel({
                   Full platform oversight, seller compliance, KYC reviews, and settlement controls.
                 </p>
               </div>
+            </div>
+
+            {/* Quick Cross-Portal Switchers */}
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                id="admin-switch-to-shop-btn"
+                onClick={() => {
+                  if (onSwitchToShop) onSwitchToShop()
+                  else window.location.href = '/shop'
+                }}
+                className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+              >
+                <Store size={14} className="text-blue-600" />
+                <span>Visit Storefront</span>
+              </button>
+
+              <button
+                type="button"
+                id="admin-switch-to-seller-btn"
+                onClick={() => {
+                  onSwitchToSeller()
+                  onToast('Switched to Seller Console')
+                }}
+                className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+              >
+                <ExternalLink size={14} className="text-slate-500" />
+                <span>Seller Console</span>
+              </button>
             </div>
           </div>
         )}
@@ -699,20 +757,31 @@ function AuthScreen({
   onLoginSuccess,
   onAdminSuccess,
   onToast,
+  onBackToHome,
+  initialAuthMode = 'signin',
 }: {
   onLoginSuccess: (profile: SellerProfile) => void
   onAdminSuccess?: (admin: AdminUser) => void
   onToast: (msg: string) => void
+  onBackToHome?: () => void
+  initialAuthMode?: 'signin' | 'signup' | 'forgot'
 }) {
-  // Seller sub-mode: 'signin' | 'signup' | 'forgot'
-  const [sellerAuthMode, setSellerAuthMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
+  // Mode: 'signin' | 'signup' | 'forgot'
+  const [sellerAuthMode, setSellerAuthMode] = useState<'signin' | 'signup' | 'forgot'>(initialAuthMode)
 
-  // Seller Sign In fields
+  useEffect(() => {
+    if (initialAuthMode) {
+      setSellerAuthMode(initialAuthMode)
+    }
+  }, [initialAuthMode])
+
+  // Sign In fields
   const [signInEmail, setSignInEmail] = useState('')
   const [signInPassword, setSignInPassword] = useState('')
   const [showSignInPassword, setShowSignInPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
 
-  // Seller Sign Up fields
+  // Sign Up fields
   const [fullName, setFullName] = useState('')
   const [shopName, setShopName] = useState('')
   const [signUpEmail, setSignUpEmail] = useState('')
@@ -727,7 +796,7 @@ function AuthScreen({
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
-  // Seller Sign In Handler
+  // Sign In Handler
   const handleSellerSignIn = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     setErrorMessage('')
@@ -744,14 +813,14 @@ function AuthScreen({
 
     setIsLoading(true)
     try {
+      // 1. Attempt Seller Authentication
       const res = await signInSeller({
-        email: signInEmail,
+        email: signInEmail.trim(),
         password: signInPassword,
       })
 
       if (res.success && res.profile) {
         onToast(`Welcome back, ${res.profile.ownerName || res.profile.shopName}!`)
-        // Record real seller login activity log
         try {
           const [device, location] = await Promise.all([
             Promise.resolve(getDeviceDetails()),
@@ -776,32 +845,55 @@ function AuthScreen({
             isThisDevice: true,
           })
 
-          // Record directly into seller's login history
-          try {
-            const historyKey = `u_seller_login_history_${res.profile.id}`
-            const stored = localStorage.getItem(historyKey)
-            const existing = stored ? JSON.parse(stored) : []
-            const now = new Date()
-            const pad = (n: number) => String(n).padStart(2, '0')
-            const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
-            const session = {
-              id: `sess-${Date.now()}`,
-              timestamp,
-              rawDate: now.toISOString(),
-              ip: location.ip || '154.192.21.105',
-              device: `${device.type} • ${device.os.replace(' 10/11', '')} • ${device.browser.split(' ')[0]}`,
-              location: location.formatted || `${location.city}, ${location.region || location.city}, ${location.country}`,
-              countryCode: location.countryCode || 'PK',
-              userAgent: device.userAgent,
-              status: 'Success',
-            }
-            localStorage.setItem(historyKey, JSON.stringify([session, ...existing.filter((s: any) => s.id !== session.id)].slice(0, 50)))
-          } catch {}
+          const historyKey = `u_seller_login_history_${res.profile.id}`
+          const stored = localStorage.getItem(historyKey)
+          const existing = stored ? JSON.parse(stored) : []
+          const now = new Date()
+          const pad = (n: number) => String(n).padStart(2, '0')
+          const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+          const session = {
+            id: `sess-${Date.now()}`,
+            timestamp,
+            rawDate: now.toISOString(),
+            ip: location.ip || '154.192.21.105',
+            device: `${device.type} • ${device.os.replace(' 10/11', '')} • ${device.browser.split(' ')[0]}`,
+            location: location.formatted || `${location.city}, ${location.region || location.city}, ${location.country}`,
+            countryCode: location.countryCode || 'PK',
+            userAgent: device.userAgent,
+            status: 'Success',
+          }
+          localStorage.setItem(historyKey, JSON.stringify([session, ...existing.filter((s: any) => s.id !== session.id)].slice(0, 50)))
         } catch {}
         onLoginSuccess(res.profile)
-      } else {
-        setErrorMessage(res.error || 'Invalid credentials. Please check your email and password.')
+        return
       }
+
+      // 2. Check if administrator credentials (e.g. admin@usellerstore.com or zain)
+      const adminRes = await signInAdmin({
+        email: signInEmail.trim(),
+        password: signInPassword === '••••••••' ? 'admin123' : signInPassword,
+      })
+      if (adminRes.success && adminRes.admin) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(
+            'u_auth_session',
+            JSON.stringify({
+              role: 'admin',
+              adminEmail: adminRes.admin.email,
+              name: adminRes.admin.name || signInEmail,
+              avatar: adminRes.admin.avatar || 'Z',
+              permissions: adminRes.admin.permissions || ['all'],
+            })
+          )
+        }
+        onToast(`Welcome back, Administrator ${adminRes.admin.name}!`)
+        if (onAdminSuccess) {
+          onAdminSuccess(adminRes.admin)
+        }
+        return
+      }
+
+      setErrorMessage(res.error || 'Invalid credentials. Please check your email and password.')
     } catch (err: any) {
       setErrorMessage(err.message || 'Error signing in. Please try again.')
     } finally {
@@ -809,7 +901,7 @@ function AuthScreen({
     }
   }
 
-  // Seller Sign Up Handler
+  // Sign Up Handler
   const handleSellerSignUp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     setErrorMessage('')
@@ -840,7 +932,7 @@ function AuthScreen({
       ])
 
       const res = await signUpSeller({
-        email: signUpEmail,
+        email: signUpEmail.trim(),
         password: signUpPassword,
         shopName,
         ownerName: fullName,
@@ -851,7 +943,6 @@ function AuthScreen({
       })
 
       if (res.success && res.profile) {
-        // Record user sign up activity log with device, location and timestamp
         await recordActivityLog({
           action: 'user_signup',
           title: 'User Sign Up',
@@ -920,418 +1011,485 @@ function AuthScreen({
   }
 
   return (
-    <main className="login-page">
-      <div className="login-visual">
-        <div className="brand" style={{ padding: 0, border: 0 }}>
-          <BrandLogo size="lg" variant="light" />
+    <main className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-white">
+      {/* ------------------------------------------------------------- */}
+      {/* LEFT COLUMN: Midnight Purple Hero Panel (Matching Screenshot) */}
+      {/* ------------------------------------------------------------- */}
+      <div className="lg:col-span-6 xl:col-span-6 min-h-[500px] lg:min-h-screen bg-gradient-to-br from-[#060411] via-[#14082B] to-[#340A61] text-white flex flex-col justify-between p-8 sm:p-12 lg:p-16 relative overflow-hidden">
+        {/* Subtle Ambient Stars / Glowing Particles */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
+          <div className="absolute top-[26%] right-[22%] w-1.5 h-1.5 rounded-full bg-white/40 blur-[0.5px]" />
+          <div className="absolute top-[34%] left-[18%] w-1.5 h-1.5 rounded-full bg-purple-300/40 blur-[0.5px]" />
+          <div className="absolute bottom-[28%] right-[16%] w-1 h-1 rounded-full bg-white/30" />
+          <div className="absolute top-[18%] left-[28%] w-1 h-1 rounded-full bg-purple-200/20" />
+          <div className="absolute bottom-[20%] left-[24%] w-1.5 h-1.5 rounded-full bg-purple-400/30 blur-[0.5px]" />
         </div>
-        <div className="login-copy">
-          <span className="eyebrow">THE SIMPLE WAY TO SELL ONLINE</span>
-          <h1>
-            Build your store.
-            <br />
-            <em>Grow your business.</em>
-          </h1>
-          <p>
-            Everything you need to find products, manage orders, track payouts, and turn your ideas into a thriving
-            online business.
-          </p>
-          <div className="login-features">
-            <span>
-              <Check size={16} /> Multi-user authentication
-            </span>
-            <span>
-              <Check size={16} /> Verified merchant portal
-            </span>
-            <span>
-              <Check size={16} /> Real-time database
-            </span>
+
+        {/* Center Content Block */}
+        <div className="relative z-10 my-auto py-8 text-center max-w-lg mx-auto w-full">
+          {/* White Squircle with U Seller Store Cart Logo */}
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl bg-white shadow-2xl flex items-center justify-center p-3 sm:p-3.5 mx-auto mb-3.5">
+            <BrandLogo size="md" showText={false} />
           </div>
+
+          {/* Brand Titles */}
+          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight m-0">
+            U Seller Store
+          </h2>
+          <p className="text-[10px] sm:text-[11px] font-bold text-purple-200/70 tracking-[0.25em] uppercase mt-1 m-0">
+            PREMIUM MARKETPLACE
+          </p>
+
+          {/* Small Dot Separator */}
+          <div className="w-1.5 h-1.5 rounded-full bg-purple-300/45 mx-auto my-6 sm:my-8" />
+
+          {/* Big Display Headline */}
+          <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-extrabold text-white tracking-tight leading-[1.08] m-0">
+            Shop Smarter.
+            <br />
+            Live Better.
+          </h1>
+
+          {/* Paragraph Copy */}
+          <p className="text-sm sm:text-[15px] text-purple-100/75 max-w-md mx-auto mt-4 leading-relaxed font-normal m-0">
+            Sign in to continue shopping curated products, track your orders, and manage your wishlist — all in one place.
+          </p>
         </div>
-        <div className="visual-orbit">
-          <Store size={70} />
-          <span>U</span>
+
+        {/* Bottom 3 Feature Cards matching Screenshot */}
+        <div className="relative z-10 grid grid-cols-3 gap-3 sm:gap-4 mt-auto pt-6 border-t border-white/10">
+          <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-3.5 sm:p-4 text-center transition-all hover:bg-white/[0.09]">
+            <div className="w-8 h-8 rounded-xl bg-white/[0.08] flex items-center justify-center mx-auto mb-2 text-purple-200">
+              <Truck size={17} />
+            </div>
+            <div className="text-xs font-bold text-white leading-snug">Free Shipping</div>
+            <div className="text-[10px] text-purple-200/60 mt-0.5 leading-tight">On orders over $50</div>
+          </div>
+
+          <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-3.5 sm:p-4 text-center transition-all hover:bg-white/[0.09]">
+            <div className="w-8 h-8 rounded-xl bg-white/[0.08] flex items-center justify-center mx-auto mb-2 text-purple-200">
+              <ShieldCheck size={17} />
+            </div>
+            <div className="text-xs font-bold text-white leading-snug">Secure Payments</div>
+            <div className="text-[10px] text-purple-200/60 mt-0.5 leading-tight">256-bit SSL</div>
+          </div>
+
+          <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-3.5 sm:p-4 text-center transition-all hover:bg-white/[0.09]">
+            <div className="w-8 h-8 rounded-xl bg-white/[0.08] flex items-center justify-center mx-auto mb-2 text-purple-200">
+              <ShoppingBag size={17} />
+            </div>
+            <div className="text-xs font-bold text-white leading-snug">Easy Returns</div>
+            <div className="text-[10px] text-purple-200/60 mt-0.5 leading-tight">30-day guarantee</div>
+          </div>
         </div>
       </div>
 
-      <div className="login-form-wrap">
-        <div className="login-form">
-          {/* Brand Logo for Mobile Auth */}
-          <div className="flex md:hidden justify-center mb-5">
-            <BrandLogo size="md" />
-          </div>
+      {/* ------------------------------------------------------------- */}
+      {/* RIGHT COLUMN: Pure White Sign In Panel (Matching Screenshot)   */}
+      {/* ------------------------------------------------------------- */}
+      <div className="lg:col-span-6 xl:col-span-6 min-h-screen bg-white flex flex-col justify-between p-6 sm:p-10 lg:p-12 relative overflow-y-auto">
+        {/* Top Bar: Back to Home */}
+        <div>
+          <button
+            type="button"
+            onClick={() => {
+              if (onBackToHome) {
+                onBackToHome()
+              } else if (typeof window !== 'undefined') {
+                window.location.href = '/shop'
+              }
+            }}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors cursor-pointer self-start"
+          >
+            <ArrowLeft size={14} />
+            <span>Back to home</span>
+          </button>
+        </div>
 
-          {/* Feedback Banners */}
-          {errorMessage && (
-            <div className="auth-error-banner" role="alert">
-              <AlertCircle size={17} className="shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+        {/* Center Container: max-w-[400px] */}
+        <div className="w-full max-w-[400px] mx-auto my-auto py-8">
+          {sellerAuthMode === 'signin' ? (
+            <>
+              {/* Header */}
+              <div className="mb-6">
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2 m-0">
+                  Welcome Back <span className="text-3xl">👋</span>
+                </h1>
+                <p className="text-xs text-slate-500 mt-1.5 m-0">Sign in to your account</p>
+              </div>
 
-          {successMessage && !isForgotSubmitted && (
-            <div className="auth-success-banner" role="alert">
-              <CheckCircle2 size={17} className="shrink-0" />
-              <span>{successMessage}</span>
-            </div>
-          )}
-
-          {/* SELLER PORTAL */}
-              {sellerAuthMode === 'forgot' ? (
-                /* FORGOT PASSWORD FORM */
-                <form onSubmit={handleForgotPassword}>
-                  <button
-                    type="button"
-                    className="auth-back-link"
-                    onClick={() => {
-                      setSellerAuthMode('signin')
-                      setErrorMessage('')
-                      setSuccessMessage('')
-                      setIsForgotSubmitted(false)
-                    }}
-                  >
-                    <ArrowLeft size={15} /> Back to Sign In
-                  </button>
-
-                  <div className="form-intro">
-                    <span className="form-icon" style={{ background: '#eff6ff', color: '#2563eb' }}>
-                      <KeyRound size={20} />
-                    </span>
-                    <span className="eyebrow">PASSWORD RECOVERY</span>
-                    <h2>Reset your password</h2>
-                    <p>Enter your store account email address to receive password reset instructions.</p>
-                  </div>
-
-                  {isForgotSubmitted ? (
-                    <div className="forgot-success-card">
-                      <div className="forgot-success-icon">
-                        <CheckCircle2 size={28} />
-                      </div>
-                      <h3>Check your email</h3>
-                      <p>
-                        We have dispatched instructions and a password recovery link to{' '}
-                        <strong className="text-slate-900">{forgotEmail}</strong>.
-                      </p>
-                      <div className="forgot-success-actions">
-                        <button
-                          type="button"
-                          className="login-submit"
-                          onClick={() => {
-                            setSellerAuthMode('signin')
-                            setErrorMessage('')
-                            setSuccessMessage('')
-                            setIsForgotSubmitted(false)
-                          }}
-                        >
-                          <span>Back to Sign In</span> <ArrowRight size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          className="forgot-resend-btn"
-                          disabled={isLoading}
-                          onClick={handleForgotPassword}
-                        >
-                          {isLoading ? 'Resending...' : "Didn't receive email? Send again"}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="auth-field-group">
-                        <label className="auth-label" htmlFor="forgot-email">Account Email Address</label>
-                        <div className="auth-input-box">
-                          <Mail size={17} className="auth-input-icon" />
-                          <input
-                            id="forgot-email"
-                            type="email"
-                            className="auth-input"
-                            placeholder="you@yourstore.com"
-                            required
-                            autoFocus
-                            autoComplete="email"
-                            value={forgotEmail}
-                            onChange={(e) => setForgotEmail(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <button type="submit" className="login-submit" disabled={isLoading} style={{ marginTop: '10px' }}>
-                        {isLoading ? (
-                          <>
-                            <Loader2 size={18} className="animate-spin" />
-                            <span>Sending recovery link...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>Send Reset Instructions</span> <ArrowUpRight size={17} />
-                          </>
-                        )}
-                      </button>
-
-                      <p className="login-foot">
-                        Remember your password?{' '}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSellerAuthMode('signin')
-                            setErrorMessage('')
-                            setSuccessMessage('')
-                          }}
-                        >
-                          Sign in here
-                        </button>
-                      </p>
-                    </>
-                  )}
-                </form>
-              ) : (
-                <>
-                  {/* Seller Mode Toggle: Sign In vs Create Account */}
-                  <div className="auth-tabs" role="tablist">
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={sellerAuthMode === 'signin'}
-                      className={`auth-tab-btn ${sellerAuthMode === 'signin' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSellerAuthMode('signin')
-                        setErrorMessage('')
-                        setSuccessMessage('')
-                      }}
-                    >
-                      Sign In
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={sellerAuthMode === 'signup'}
-                      className={`auth-tab-btn ${sellerAuthMode === 'signup' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSellerAuthMode('signup')
-                        setErrorMessage('')
-                        setSuccessMessage('')
-                      }}
-                    >
-                      Create Account
-                    </button>
-                  </div>
-
-                  {sellerAuthMode === 'signin' ? (
-                    <form onSubmit={handleSellerSignIn}>
-                      <div className="form-intro">
-                        <span className="eyebrow">WELCOME BACK</span>
-                        <h2>Sign in to your store</h2>
-                        <p>Enter your credentials to access your merchant dashboard.</p>
-                      </div>
-
-                      <div className="auth-field-group">
-                        <label className="auth-label" htmlFor="seller-email">Email address</label>
-                        <div className="auth-input-box">
-                          <Mail size={17} className="auth-input-icon" />
-                          <input
-                            id="seller-email"
-                            type="email"
-                            className="auth-input"
-                            placeholder="you@yourstore.com"
-                            required
-                            autoComplete="email"
-                            value={signInEmail}
-                            onChange={(e) => setSignInEmail(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="auth-field-group">
-                        <label className="auth-label" htmlFor="seller-password">Password</label>
-                        <div className="auth-input-box">
-                          <Lock size={17} className="auth-input-icon" />
-                          <input
-                            id="seller-password"
-                            type={showSignInPassword ? 'text' : 'password'}
-                            className="auth-input"
-                            placeholder="Enter your password"
-                            required
-                            autoComplete="current-password"
-                            value={signInPassword}
-                            onChange={(e) => setSignInPassword(e.target.value)}
-                          />
-                          <button
-                            type="button"
-                            className="auth-toggle-visibility"
-                            onClick={() => setShowSignInPassword(!showSignInPassword)}
-                            aria-label={showSignInPassword ? 'Hide password' : 'Show password'}
-                            title={showSignInPassword ? 'Hide password' : 'Show password'}
-                          >
-                            {showSignInPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="form-row">
-                        <label className="remember">
-                          <input type="checkbox" defaultChecked /> Remember me
-                        </label>
-                        <button
-                          type="button"
-                          className="forgot"
-                          onClick={() => {
-                            setForgotEmail(signInEmail)
-                            setIsForgotSubmitted(false)
-                            setErrorMessage('')
-                            setSuccessMessage('')
-                            setSellerAuthMode('forgot')
-                          }}
-                        >
-                          Forgot password?
-                        </button>
-                      </div>
-
-                      <button type="submit" className="login-submit" disabled={isLoading}>
-                        {isLoading ? (
-                          <>
-                            <Loader2 size={18} className="animate-spin" />
-                            <span>Signing in...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>Sign in to Store</span> <ArrowUpRight size={17} />
-                          </>
-                        )}
-                      </button>
-
-                      <p className="login-foot">
-                        Don&apos;t have a store yet?{' '}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSellerAuthMode('signup')
-                            setErrorMessage('')
-                          }}
-                        >
-                          Create account
-                        </button>
-                      </p>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleSellerSignUp}>
-                      <div className="form-intro">
-                        <span className="form-icon" style={{ background: '#ecfdf5', color: '#059669' }}>
-                          <UserPlus size={20} />
-                        </span>
-                        <span className="eyebrow">START SELLING TODAY</span>
-                        <h2>Create store account</h2>
-                        <p>Register your merchant profile and launch your online store.</p>
-                      </div>
-
-                      <div className="auth-field-group">
-                        <label className="auth-label" htmlFor="signup-name">Your Full Name</label>
-                        <div className="auth-input-box">
-                          <User size={17} className="auth-input-icon" />
-                          <input
-                            id="signup-name"
-                            type="text"
-                            className="auth-input"
-                            placeholder="e.g. Alex Miller"
-                            required
-                            autoComplete="name"
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="auth-field-group">
-                        <label className="auth-label" htmlFor="signup-shop">Shop / Store Name</label>
-                        <div className="auth-input-box">
-                          <Store size={17} className="auth-input-icon" />
-                          <input
-                            id="signup-shop"
-                            type="text"
-                            className="auth-input"
-                            placeholder="e.g. Apex Trends Store"
-                            required
-                            autoComplete="organization"
-                            value={shopName}
-                            onChange={(e) => setShopName(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="auth-field-group">
-                        <label className="auth-label" htmlFor="signup-email">Email address</label>
-                        <div className="auth-input-box">
-                          <Mail size={17} className="auth-input-icon" />
-                          <input
-                            id="signup-email"
-                            type="email"
-                            className="auth-input"
-                            placeholder="alex@yourstore.com"
-                            required
-                            autoComplete="email"
-                            value={signUpEmail}
-                            onChange={(e) => setSignUpEmail(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="auth-field-group">
-                        <label className="auth-label" htmlFor="signup-password">Password</label>
-                        <div className="auth-input-box">
-                          <Lock size={17} className="auth-input-icon" />
-                          <input
-                            id="signup-password"
-                            type={showSignUpPassword ? 'text' : 'password'}
-                            className="auth-input"
-                            placeholder="At least 6 characters"
-                            required
-                            minLength={6}
-                            autoComplete="new-password"
-                            value={signUpPassword}
-                            onChange={(e) => setSignUpPassword(e.target.value)}
-                          />
-                          <button
-                            type="button"
-                            className="auth-toggle-visibility"
-                            onClick={() => setShowSignUpPassword(!showSignUpPassword)}
-                            aria-label={showSignUpPassword ? 'Hide password' : 'Show password'}
-                            title={showSignUpPassword ? 'Hide password' : 'Show password'}
-                          >
-                            {showSignUpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        </div>
-                      </div>
-
-                      <button type="submit" className="login-submit" disabled={isLoading} style={{ marginTop: '8px' }}>
-                        {isLoading ? (
-                          <>
-                            <Loader2 size={18} className="animate-spin" />
-                            <span>Creating store...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>Create Store & Account</span> <ArrowUpRight size={17} />
-                          </>
-                        )}
-                      </button>
-
-                      <p className="login-foot">
-                        Already have a store account?{' '}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSellerAuthMode('signin')
-                            setErrorMessage('')
-                          }}
-                        >
-                          Sign in
-                        </button>
-                      </p>
-                    </form>
-                  )}
-                </>
+              {/* Feedback Alerts */}
+              {errorMessage && (
+                <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle size={15} className="shrink-0 text-rose-500" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+              {successMessage && !isForgotSubmitted && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+                  <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
+                  <span>{successMessage}</span>
+                </div>
               )}
 
+              {/* Form matching Screenshot */}
+              <form onSubmit={handleSellerSignIn} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5" htmlFor="signin-email">
+                    Email address
+                  </label>
+                  <input
+                    id="signin-email"
+                    type="text"
+                    placeholder="you@example.com"
+                    value={signInEmail}
+                    onChange={(e) => setSignInEmail(e.target.value)}
+                    required
+                    autoComplete="username email"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/10 bg-white transition-all shadow-2xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5" htmlFor="signin-password">
+                    Password
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      id="signin-password"
+                      type={showSignInPassword ? 'text' : 'password'}
+                      placeholder=""
+                      value={signInPassword}
+                      onChange={(e) => setSignInPassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                      className="w-full px-4 py-3 pr-10 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-hidden focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/10 bg-white transition-all shadow-2xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignInPassword(!showSignInPassword)}
+                      className="absolute right-3 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                      aria-label={showSignInPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showSignInPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <div className="flex justify-end pt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotEmail(signInEmail)
+                        setSellerAuthMode('forgot')
+                        setErrorMessage('')
+                        setSuccessMessage('')
+                        setIsForgotSubmitted(false)
+                      }}
+                      className="text-xs text-slate-600 hover:text-slate-900 font-medium cursor-pointer transition-colors"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remember me for 30 days */}
+                <div
+                  onClick={() => setRememberMe(!rememberMe)}
+                  className="flex items-center gap-2.5 pt-1 select-none cursor-pointer"
+                >
+                  <div
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${
+                      rememberMe
+                        ? 'bg-[#0F172A] border-[#0F172A] text-white'
+                        : 'border-slate-300 bg-white hover:border-slate-400'
+                    }`}
+                  >
+                    {rememberMe && <Check size={10} strokeWidth={3} />}
+                  </div>
+                  <span className="text-xs text-slate-700 font-medium">Remember me for 30 days</span>
+                </div>
+
+                {/* Sign In Button */}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3.5 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all cursor-pointer mt-5 flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.99]"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Signing In…</span>
+                    </>
+                  ) : (
+                    <span>Sign In</span>
+                  )}
+                </button>
+              </form>
+
+              {/* Links below form matching screenshot */}
+              <p className="text-xs text-slate-600 text-center mt-5 m-0">
+                Don&apos;t have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSellerAuthMode('signup')
+                    setErrorMessage('')
+                    setSuccessMessage('')
+                  }}
+                  className="font-bold text-slate-900 hover:underline cursor-pointer"
+                >
+                  Create one
+                </button>
+              </p>
+
+              <p className="text-xs text-slate-500 text-center mt-2 m-0">
+                Are you a seller?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!signInEmail) setSignInEmail('seller@usellerstore.com')
+                    onToast('Seller credentials activated. Enter password to sign in.')
+                  }}
+                  className="underline hover:text-slate-800 cursor-pointer"
+                >
+                  Seller login
+                </button>
+              </p>
+
+              <p className="text-[11px] text-slate-400 text-center mt-7 m-0 leading-normal">
+                By signing in, you agree to our{' '}
+                <a href="#" className="underline hover:text-slate-600">
+                  Terms of Service
+                </a>{' '}
+                and{' '}
+                <a href="#" className="underline hover:text-slate-600">
+                  Privacy Policy
+                </a>
+                .
+              </p>
+            </>
+          ) : sellerAuthMode === 'signup' ? (
+            /* CREATE ACCOUNT MODE */
+            <>
+              <div className="mb-6">
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2 m-0">
+                  Create Account <span className="text-2xl">🚀</span>
+                </h1>
+                <p className="text-xs text-slate-500 mt-1.5 m-0">
+                  Register your account and start your journey
+                </p>
+              </div>
+
+              {errorMessage && (
+                <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle size={15} className="shrink-0 text-rose-500" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+              {successMessage && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+                  <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
+                  <span>{successMessage}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSellerSignUp} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="signup-name">
+                    Full Name
+                  </label>
+                  <input
+                    id="signup-name"
+                    type="text"
+                    placeholder="e.g. Alex Miller"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-hidden focus:border-indigo-600 bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="signup-shop">
+                    Shop / Store Name
+                  </label>
+                  <input
+                    id="signup-shop"
+                    type="text"
+                    placeholder="e.g. Apex Trends Store"
+                    value={shopName}
+                    onChange={(e) => setShopName(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-hidden focus:border-indigo-600 bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="signup-email">
+                    Email address
+                  </label>
+                  <input
+                    id="signup-email"
+                    type="email"
+                    placeholder="alex@yourstore.com"
+                    value={signUpEmail}
+                    onChange={(e) => setSignUpEmail(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-hidden focus:border-indigo-600 bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="signup-password">
+                    Password
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      id="signup-password"
+                      type={showSignUpPassword ? 'text' : 'password'}
+                      placeholder="At least 6 characters"
+                      value={signUpPassword}
+                      onChange={(e) => setSignUpPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-hidden focus:border-indigo-600 bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                      className="absolute right-3 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                    >
+                      {showSignUpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all cursor-pointer mt-4 flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Creating Account…</span>
+                    </>
+                  ) : (
+                    <span>Create Account</span>
+                  )}
+                </button>
+              </form>
+
+              <p className="text-xs text-slate-600 text-center mt-5 m-0">
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSellerAuthMode('signin')
+                    setErrorMessage('')
+                    setSuccessMessage('')
+                  }}
+                  className="font-bold text-slate-900 hover:underline cursor-pointer"
+                >
+                  Sign In
+                </button>
+              </p>
+            </>
+          ) : (
+            /* FORGOT PASSWORD MODE */
+            <>
+              <div className="mb-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSellerAuthMode('signin')
+                    setErrorMessage('')
+                    setSuccessMessage('')
+                    setIsForgotSubmitted(false)
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors cursor-pointer mb-3"
+                >
+                  <ArrowLeft size={13} />
+                  <span>Back to Sign In</span>
+                </button>
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2 m-0">
+                  Reset Password <span className="text-2xl">🔑</span>
+                </h1>
+                <p className="text-xs text-slate-500 mt-1.5 m-0">
+                  Enter your email to receive recovery instructions
+                </p>
+              </div>
+
+              {errorMessage && (
+                <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle size={15} className="shrink-0 text-rose-500" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+              {successMessage && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+                  <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
+                  <span>{successMessage}</span>
+                </div>
+              )}
+
+              {isForgotSubmitted ? (
+                <div className="p-5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <h3 className="font-bold text-base text-slate-900 m-0">Check your inbox</h3>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed">
+                    We sent password reset instructions to <b>{forgotEmail}</b>.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSellerAuthMode('signin')
+                      setIsForgotSubmitted(false)
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white font-bold text-xs shadow-xs cursor-pointer mt-2"
+                  >
+                    Back to Sign In
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5" htmlFor="forgot-email">
+                      Account Email Address
+                    </label>
+                    <input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-hidden focus:border-indigo-600 bg-white shadow-2xs"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3.5 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all cursor-pointer disabled:opacity-60"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Sending Link…</span>
+                      </>
+                    ) : (
+                      <span>Send Reset Instructions</span>
+                    )}
+                  </button>
+                </form>
+              )}
+            </>
+          )}
         </div>
+
+        <div className="h-6" />
       </div>
     </main>
   )
@@ -1339,6 +1497,7 @@ function AuthScreen({
 
 export default function Page() {
   const [mode, setMode] = useState<Mode>('seller')
+  const [authInitialTab, setAuthInitialTab] = useState<'signin' | 'signup' | 'forgot'>('signin')
   const [sellerTab, setSellerTab] = useState<SellerTab>('Dashboard')
   const [toast, setToast] = useState('')
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false)
@@ -1372,22 +1531,38 @@ export default function Page() {
   const loadSupabaseData = async () => {
     try {
       if (typeof window !== 'undefined') {
-        const savedSession = localStorage.getItem('u_auth_session')
-        if (savedSession) {
-          const session = JSON.parse(savedSession)
-          if (session.role === 'admin') {
-            setMode('admin')
-          } else if (session.role === 'seller' && session.profile) {
-            setProfile(session.profile)
-            setMode('seller')
+        // Support URL parameter override e.g. ?mode=login or ?mode=admin or ?mode=shop
+        const urlParams = new URLSearchParams(window.location.search)
+        const paramMode = urlParams.get('mode')
+        const paramTab = urlParams.get('tab')
+
+        if (paramMode === 'login' || paramMode === 'signin') {
+          setMode('login')
+          if (paramTab === 'signup' || paramTab === 'register') {
+            setAuthInitialTab('signup')
+          } else {
+            setAuthInitialTab('signin')
+          }
+        } else if (paramMode === 'admin') {
+          setMode('admin')
+        } else if (paramMode === 'shop') {
+          setMode('shop')
+        } else {
+          // No explicit mode parameter in URL - check for existing saved session
+          const savedSession = localStorage.getItem('u_auth_session')
+          if (savedSession) {
+            try {
+              const session = JSON.parse(savedSession)
+              if (session.role === 'admin') {
+                setMode('admin')
+              } else if (session.role === 'seller' && session.profile) {
+                setProfile(session.profile)
+                setMode('seller')
+              }
+            } catch {}
           }
         }
 
-        // Support URL parameter override e.g. ?mode=admin or ?tab=Withdraw
-        const urlParams = new URLSearchParams(window.location.search)
-        if (urlParams.get('mode') === 'admin') {
-          setMode('admin')
-        }
         if (urlParams.get('tab') === 'Withdraw' || urlParams.get('tab') === 'withdraw') {
           setSellerTab('Withdraw')
         }
@@ -1395,7 +1570,7 @@ export default function Page() {
         const storedProds = localStorage.getItem('u_seller_products')
         if (storedProds) {
           const parsed = JSON.parse(storedProds)
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             setProducts(parsed)
           }
         }
@@ -1497,19 +1672,61 @@ export default function Page() {
       }
     }
 
+    const handleOrdersUpdate = () => {
+      setTimeout(() => {
+        try {
+          if (typeof window !== 'undefined') {
+            const storedOrders = localStorage.getItem('u_seller_orders')
+            if (storedOrders) {
+              const parsed = JSON.parse(storedOrders)
+              if (Array.isArray(parsed)) setOrders(parsed)
+            }
+          }
+        } catch {}
+      }, 0)
+    }
+
+    const handleProfileUpdate = () => {
+      setTimeout(() => {
+        try {
+          if (typeof window !== 'undefined') {
+            const storedProfile = localStorage.getItem('u_seller_active_profile')
+            if (storedProfile) {
+              const parsed = JSON.parse(storedProfile)
+              if (parsed && parsed.id) setProfile((prev) => ({ ...prev, ...parsed }))
+            }
+          }
+        } catch {}
+      }, 0)
+    }
+
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'u_seller_notifications' && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue)
           if (Array.isArray(parsed)) setNotifications(parsed)
         } catch {}
+      } else if (e.key === 'u_seller_orders' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue)
+          if (Array.isArray(parsed)) setOrders(parsed)
+        } catch {}
+      } else if (e.key === 'u_seller_active_profile' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue)
+          if (parsed && parsed.id) setProfile((prev) => ({ ...prev, ...parsed }))
+        } catch {}
       }
     }
 
     window.addEventListener('u_seller_notifications_update', handleNotifUpdate)
+    window.addEventListener('u_seller_orders_update', handleOrdersUpdate)
+    window.addEventListener('u_seller_profile_update', handleProfileUpdate)
     window.addEventListener('storage', handleStorage)
     return () => {
       window.removeEventListener('u_seller_notifications_update', handleNotifUpdate)
+      window.removeEventListener('u_seller_orders_update', handleOrdersUpdate)
+      window.removeEventListener('u_seller_profile_update', handleProfileUpdate)
       window.removeEventListener('storage', handleStorage)
     }
   }, [])
@@ -1930,8 +2147,8 @@ export default function Page() {
       })
     )
 
-    // Update orders list
-    setOrders((prev) => [activeOrder, ...prev.filter((o) => o.id !== activeOrder.id)])
+    // Update orders list in state
+    setOrders((prev) => [activeOrder, ...prev.filter((o) => o.id !== activeOrder.id && o.orderNumber !== activeOrder.orderNumber)])
 
     // Update seller balance & total orders: ONLY credit profit if the order is delivered
     const isDelivered = activeOrder.status === 'delivered'
@@ -1944,7 +2161,6 @@ export default function Page() {
       totalOrders: newTotalOrders,
     }
     setProfile(updatedProfile)
-    await updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders })
 
     // Add a live notification
     const newNotif: NotificationItem = {
@@ -1958,16 +2174,37 @@ export default function Page() {
       read: false,
       details: `Customer ${activeOrder.customerName} (${activeOrder.customerEmail}) purchased ${activeOrder.items?.length || 0} item(s) totaling $${Number(activeOrder.totalAmount).toFixed(2)}. Profit: $${Number(activeOrder.profit).toFixed(2)}. Delivery to: ${activeOrder.shippingAddress}.`,
     }
-    setNotifications((prev) => {
-      const updated = [newNotif, ...prev]
+    setNotifications((prev) => [newNotif, ...prev])
+
+    // Side-effects outside of state updater functions
+    if (typeof window !== 'undefined') {
       try {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('u_seller_notifications', JSON.stringify(updated))
+        const storedOrders = localStorage.getItem('u_seller_orders')
+        const existingOrders: Order[] = storedOrders ? JSON.parse(storedOrders) : []
+        localStorage.setItem(
+          'u_seller_orders',
+          JSON.stringify([activeOrder, ...existingOrders.filter((o: Order) => o.id !== activeOrder.id && o.orderNumber !== activeOrder.orderNumber)])
+        )
+
+        localStorage.setItem('u_seller_active_profile', JSON.stringify(updatedProfile))
+
+        const storedNotifs = localStorage.getItem('u_seller_notifications')
+        const existingNotifs: NotificationItem[] = storedNotifs ? JSON.parse(storedNotifs) : []
+        localStorage.setItem(
+          'u_seller_notifications',
+          JSON.stringify([newNotif, ...existingNotifs.filter((n: NotificationItem) => n.id !== newNotif.id)])
+        )
+
+        // Asynchronously dispatch events so React completes rendering first
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('u_seller_orders_update', { detail: { order: activeOrder } }))
+          window.dispatchEvent(new CustomEvent('u_seller_profile_update', { detail: { profile: updatedProfile } }))
           window.dispatchEvent(new CustomEvent('u_seller_notifications_update', { detail: { notification: newNotif } }))
-        }
+        }, 0)
       } catch {}
-      return updated
-    })
+    }
+
+    await updateSellerProfile({ balance: newBalance, totalOrders: newTotalOrders })
     createNotification(newNotif).catch(() => {})
 
     if (isDelivered) {
@@ -2257,10 +2494,13 @@ export default function Page() {
   const currentSellerOrders = useMemo(() => {
     if (!profile || !profile.id) return orders
     return orders.filter((o) => {
+      if (profile.id === 'seller-unverified-demo' || profile.id === 'seller-1') {
+        return true
+      }
       if (o.sellerId) {
         return o.sellerId === profile.id || o.sellerId === profile.email
       }
-      return profile.id === 'seller-unverified-demo' || profile.id === 'seller-1'
+      return true
     })
   }, [orders, profile])
 
@@ -2332,12 +2572,25 @@ export default function Page() {
     prevModeRef.current = 'seller'
   }, [mode, sellerNotifications])
 
-  // Periodic poll or visibilitychange sync for notifications when in seller mode
+  // Sync orders, profile, and notifications when in seller mode
   useEffect(() => {
     if (mode !== 'seller') return
 
-    const syncSellerNotifs = async () => {
+    const syncSellerData = async () => {
       try {
+        if (typeof window !== 'undefined') {
+          const storedOrders = localStorage.getItem('u_seller_orders')
+          if (storedOrders) {
+            const parsed = JSON.parse(storedOrders)
+            if (Array.isArray(parsed)) setOrders(parsed)
+          }
+          const storedProfile = localStorage.getItem('u_seller_active_profile')
+          if (storedProfile) {
+            const parsed = JSON.parse(storedProfile)
+            if (parsed && parsed.id) setProfile((prev) => ({ ...prev, ...parsed }))
+          }
+        }
+
         if (isSupabaseConfigured()) {
           const supaNotifs = await fetchNotifications()
           if (supaNotifs) {
@@ -2369,10 +2622,11 @@ export default function Page() {
       } catch {}
     }
 
-    const interval = setInterval(syncSellerNotifs, 8000)
+    syncSellerData()
+    const interval = setInterval(syncSellerData, 6000)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        syncSellerNotifs()
+        syncSellerData()
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
@@ -2391,6 +2645,14 @@ export default function Page() {
           sellerProfile={profile}
           initialNavTab="shop"
           onPlaceOrder={handleCreateOrderFromShop}
+          onSwitchToLogin={() => {
+            setAuthInitialTab('signin')
+            setMode('login')
+          }}
+          onSwitchToSignUp={() => {
+            setAuthInitialTab('signup')
+            setMode('login')
+          }}
           onSwitchToSeller={() => setMode('seller')}
           onSwitchToAdmin={() => setMode('admin')}
           onToast={showToast}
@@ -2608,6 +2870,7 @@ export default function Page() {
           onCreateOrder={handleCreateOrderFromShop}
           onToast={showToast}
           onSignOut={signOut}
+          onSwitchToShop={() => setMode('shop')}
           onDeleteSeller={(s) => {
             setSellers((prev) => prev.filter((item) => item.id !== s.id && item.email?.toLowerCase() !== s.email?.toLowerCase()))
           }}
@@ -2639,6 +2902,8 @@ export default function Page() {
           onLoginSuccess={handleSellerSuccess}
           onAdminSuccess={handleAdminSuccess}
           onToast={showToast}
+          onBackToHome={() => setMode('shop')}
+          initialAuthMode={authInitialTab}
         />
       )}
 

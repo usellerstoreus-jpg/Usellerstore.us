@@ -44,13 +44,23 @@ import {
 import { Product, Order, SellerProfile, shopCategories } from '@/lib/mock-data'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { CustomerAccountPortal, AccountTab } from './CustomerAccountPortal'
+import { ProductDetailView } from './ProductDetailView'
+import { CheckoutView } from './CheckoutView'
+import { ShopNotificationsDrawer } from './ShopNotificationsDrawer'
+import {
+  ExtendedNotificationItem,
+  getShopStoredNotifications,
+  saveShopStoredNotifications,
+} from '@/lib/notifications'
 
 export interface ShoppingDashboardProps {
   products: Product[]
   sellerProfile: SellerProfile
-  initialNavTab?: 'home' | 'shop' | 'categories'
+  initialNavTab?: 'home' | 'shop' | 'categories' | 'checkout'
   initialAccountTab?: AccountTab | null
   onPlaceOrder?: (order: Order) => Promise<void> | void
+  onSwitchToLogin?: () => void
+  onSwitchToSignUp?: () => void
   onSwitchToSeller?: () => void
   onSwitchToAdmin?: () => void
   onToast: (msg: string) => void
@@ -179,12 +189,14 @@ export function ShoppingDashboard({
   initialNavTab = 'shop',
   initialAccountTab = null,
   onPlaceOrder,
+  onSwitchToLogin,
+  onSwitchToSignUp,
   onSwitchToSeller,
   onSwitchToAdmin,
   onToast,
 }: ShoppingDashboardProps) {
   // Navigation & Carousel State
-  const [activeNavTab, setActiveNavTab] = useState<'home' | 'shop' | 'categories'>(initialNavTab)
+  const [activeNavTab, setActiveNavTab] = useState<'home' | 'shop' | 'categories' | 'checkout'>(initialNavTab)
   const [accountTab, setAccountTab] = useState<AccountTab | null>(initialAccountTab)
   const [currentSlide, setCurrentSlide] = useState(1) // Default to slide 2 ("02 / 06 - Made for everyday comfort")
   const [searchQuery, setSearchQuery] = useState('')
@@ -202,9 +214,16 @@ export function ShoppingDashboard({
   const [allOrders, setAllOrders] = useState<Order[]>([])
   const [isMounted, setIsMounted] = useState(false)
 
-  // Modals State
+  // Modals & Product Detail State
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+
+  const handleOpenProduct = (product: Product) => {
+    setSelectedProduct(product)
+    setQuickViewProduct(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null)
   const [promoCode, setPromoCode] = useState('')
@@ -217,6 +236,42 @@ export function ShoppingDashboard({
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null)
   const [isSearchingTrack, setIsSearchingTrack] = useState(false)
   const [trackError, setTrackError] = useState('')
+
+  // Storefront Product & Store Notifications State
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [shopNotifications, setShopNotifications] = useState<ExtendedNotificationItem[]>([])
+
+  const unreadShopNotifsCount = useMemo(
+    () => shopNotifications.filter((n) => !n.read).length,
+    [shopNotifications]
+  )
+
+  const handleMarkShopNotifAsRead = (id: string) => {
+    const updated = shopNotifications.map((n) => (n.id === id ? { ...n, read: true } : n))
+    setShopNotifications(updated)
+    saveShopStoredNotifications(updated)
+  }
+
+  const handleMarkAllShopNotifsAsRead = () => {
+    const updated = shopNotifications.map((n) => ({ ...n, read: true }))
+    setShopNotifications(updated)
+    saveShopStoredNotifications(updated)
+    onToast('All notifications marked as read')
+  }
+
+  const handleDeleteShopNotif = (id: string) => {
+    const updated = shopNotifications.filter((n) => n.id !== id)
+    setShopNotifications(updated)
+    saveShopStoredNotifications(updated)
+    onToast('Notification dismissed')
+  }
+
+  const handleApplyPromoFromNotif = (code: string) => {
+    setPromoCode(code)
+    setPromoDiscount(0.1)
+    setPromoApplied(true)
+    onToast(`Promo code ${code} applied! 10% discount added to cart.`)
+  }
 
   // Checkout Form State
   const [customerInfo, setCustomerInfo] = useState({
@@ -259,8 +314,65 @@ export function ShoppingDashboard({
           const parsed = JSON.parse(savedAllOrders)
           if (Array.isArray(parsed)) setAllOrders(parsed)
         }
+        const notifs = getShopStoredNotifications()
+        setShopNotifications(notifs)
       }
     } catch {}
+
+    const handleOrdersSync = () => {
+      setTimeout(() => {
+        try {
+          if (typeof window !== 'undefined') {
+            const savedAll = localStorage.getItem('u_seller_orders')
+            if (savedAll) {
+              const parsed = JSON.parse(savedAll)
+              if (Array.isArray(parsed)) setAllOrders(parsed)
+            }
+            const savedRecent = localStorage.getItem('u_recent_orders')
+            if (savedRecent) {
+              const parsed = JSON.parse(savedRecent)
+              if (Array.isArray(parsed)) setRecentOrderNumbers(parsed)
+            }
+          }
+        } catch {}
+      }, 0)
+    }
+
+    const handleShopNotifsSync = () => {
+      try {
+        const notifs = getShopStoredNotifications()
+        setShopNotifications(notifs)
+      } catch {}
+    }
+
+    window.addEventListener('u_seller_orders_update', handleOrdersSync)
+    window.addEventListener('u_shop_notifications_update', handleShopNotifsSync)
+    window.addEventListener('storage', handleOrdersSync)
+    window.addEventListener('storage', handleShopNotifsSync)
+    return () => {
+      window.removeEventListener('u_seller_orders_update', handleOrdersSync)
+      window.removeEventListener('u_shop_notifications_update', handleShopNotifsSync)
+      window.removeEventListener('storage', handleOrdersSync)
+      window.removeEventListener('storage', handleShopNotifsSync)
+    }
+  }, [])
+
+  // Sync with browser URL / checkout popstate
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window !== 'undefined') {
+        const path = window.location.pathname
+        if (path === '/checkout') {
+          setActiveNavTab('checkout')
+          setSelectedProduct(null)
+          setAccountTab(null)
+        } else if (path === '/shop') {
+          setActiveNavTab('shop')
+        }
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
   // Sync Cart to LocalStorage
@@ -420,6 +532,7 @@ export function ShoppingDashboard({
       return acc + unitProfit * item.quantity
     }, 0)
 
+    const activeSellerId = sellerProfile?.id || 'seller-1'
     const newOrder: Order = {
       id: 'ord-' + Date.now(),
       orderNumber: '#ORD-' + Math.floor(10000 + Math.random() * 90000),
@@ -430,15 +543,55 @@ export function ShoppingDashboard({
       status: 'paid',
       totalAmount: grandTotal,
       profit: Number(orderProfit.toFixed(2)),
+      sellerId: activeSellerId,
       items: cart.map((c) => ({
         productTitle: c.product.title,
         quantity: c.quantity,
         price: Number(c.product.sell),
         image: c.product.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80',
+        sellerId: (c.product as any).sellerId || activeSellerId,
       })),
     }
 
     try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('u_seller_orders')
+        const list: Order[] = stored ? JSON.parse(stored) : []
+        const updatedList = [newOrder, ...list.filter((o) => o.id !== newOrder.id && o.orderNumber !== newOrder.orderNumber)]
+        localStorage.setItem('u_seller_orders', JSON.stringify(updatedList))
+
+        // Update seller profile totalOrders
+        const storedProf = localStorage.getItem('u_seller_active_profile')
+        const prof = storedProf ? JSON.parse(storedProf) : sellerProfile
+        const updatedProf = {
+          ...prof,
+          totalOrders: (Number(prof?.totalOrders) || 0) + 1,
+        }
+        localStorage.setItem('u_seller_active_profile', JSON.stringify(updatedProf))
+
+        // Create seller notification
+        const newNotif = {
+          id: `notif-${Date.now()}`,
+          title: 'New Customer Order',
+          description: `Order ${newOrder.orderNumber} for $${Number(newOrder.totalAmount).toFixed(2)} received from ${newOrder.customerName}`,
+          date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase(),
+          timeAgo: 'Just now',
+          refCode: newOrder.orderNumber,
+          type: 'order',
+          read: false,
+          details: `Customer ${newOrder.customerName} placed order ${newOrder.orderNumber} for ${newOrder.items.length} item(s) totaling $${Number(newOrder.totalAmount).toFixed(2)}. Delivery to: ${newOrder.shippingAddress}.`,
+        }
+        const notifList = JSON.parse(localStorage.getItem('u_seller_notifications') || '[]')
+        localStorage.setItem('u_seller_notifications', JSON.stringify([newNotif, ...notifList.filter((n: any) => n.id !== newNotif.id)]))
+
+        // Dispatch live custom events asynchronously
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('u_seller_orders_update', { detail: { order: newOrder } }))
+          window.dispatchEvent(new CustomEvent('u_seller_notifications_update', { detail: { notification: newNotif } }))
+          window.dispatchEvent(new CustomEvent('u_seller_profile_update', { detail: { profile: updatedProf } }))
+        }, 0)
+      }
+
       if (onPlaceOrder) {
         await onPlaceOrder(newOrder)
       }
@@ -456,7 +609,7 @@ export function ShoppingDashboard({
       clearCart()
       setIsCheckoutOpen(false)
       setIsCartOpen(false)
-      onToast(`Order ${newOrder.orderNumber} successfully placed and recorded in database!`)
+      onToast(`Order ${newOrder.orderNumber} successfully placed and recorded in seller account!`)
     } catch (err) {
       console.error('Order placement error:', err)
       onToast('Order placement failed. Please try again.')
@@ -509,6 +662,97 @@ export function ShoppingDashboard({
 
   const activeSlideData = heroSlides[currentSlide]
 
+  // Render Dedicated Checkout Screen when activeNavTab === 'checkout'
+  if (activeNavTab === 'checkout') {
+    return (
+      <CheckoutView
+        cart={cart}
+        allProducts={products}
+        sellerProfile={sellerProfile}
+        wishlistCount={wishlist.length}
+        onPlaceOrder={async (newOrder) => {
+          setAllOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)])
+          setRecentOrderNumbers((prev) => {
+            const updated = [newOrder.orderNumber, ...prev.filter((n) => n !== newOrder.orderNumber)].slice(0, 5)
+            try {
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('u_recent_orders', JSON.stringify(updated))
+              }
+            } catch {}
+            return updated
+          })
+          if (onPlaceOrder) {
+            await onPlaceOrder(newOrder)
+          }
+        }}
+        onNavigateOrders={() => {
+          setActiveNavTab('shop')
+          setSelectedProduct(null)
+          setAccountTab('orders')
+          if (typeof window !== 'undefined') {
+            window.history.pushState(null, '', '/shop')
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }
+        }}
+        onNavigateHome={() => {
+          setActiveNavTab('home')
+          setSelectedProduct(null)
+          setAccountTab(null)
+          if (typeof window !== 'undefined') {
+            window.history.pushState(null, '', '/')
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }
+        }}
+        onNavigateShop={() => {
+          setActiveNavTab('shop')
+          setSelectedProduct(null)
+          setAccountTab(null)
+          if (typeof window !== 'undefined') {
+            window.history.pushState(null, '', '/shop')
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }
+        }}
+        onNavigateCategories={() => {
+          setActiveNavTab('home')
+          setSelectedProduct(null)
+          setAccountTab(null)
+          if (typeof window !== 'undefined') {
+            window.history.pushState(null, '', '/')
+            setTimeout(() => {
+              document.getElementById('categories-section')?.scrollIntoView({ behavior: 'smooth' })
+            }, 50)
+          }
+        }}
+        onNavigateCart={() => {
+          setActiveNavTab('shop')
+          setSelectedProduct(null)
+          setAccountTab('cart')
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        onOpenWishlist={() => {
+          setActiveNavTab('shop')
+          setSelectedProduct(null)
+          setAccountTab('wishlist')
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        onOpenNotifications={() => {
+          setIsNotificationsOpen(true)
+        }}
+        unreadNotifsCount={unreadShopNotifsCount}
+        onOpenProfile={() => {
+          setActiveNavTab('shop')
+          setSelectedProduct(null)
+          setAccountTab('profile')
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        onToast={onToast}
+        onClearCart={() => setCart([])}
+        onUpdateCartQuantity={updateCartQuantity}
+        onRemoveFromCart={removeFromCart}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-white text-slate-900 flex flex-col antialiased selection:bg-blue-600 selection:text-white">
       {/* 1. TOP NAVIGATION BAR (Matching User Reference Image) */}
@@ -518,6 +762,7 @@ export function ShoppingDashboard({
           <div className="flex items-center gap-6 lg:gap-8 shrink-0">
             {/* Official U Seller Store Logo */}
             <BrandLogo size="md" onClick={() => {
+              setSelectedProduct(null)
               setAccountTab(null)
               setActiveNavTab('shop')
               window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -529,6 +774,7 @@ export function ShoppingDashboard({
                 type="button"
                 id="nav-link-home"
                 onClick={() => {
+                  setSelectedProduct(null)
                   setAccountTab(null)
                   setActiveNavTab('home')
                   setSelectedCategory('All')
@@ -536,7 +782,7 @@ export function ShoppingDashboard({
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
                 className={`transition-colors cursor-pointer ${
-                  !accountTab && activeNavTab === 'home'
+                  !accountTab && !selectedProduct && activeNavTab === 'home'
                     ? 'text-slate-950 font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
@@ -547,12 +793,13 @@ export function ShoppingDashboard({
                 type="button"
                 id="nav-link-shop"
                 onClick={() => {
+                  setSelectedProduct(null)
                   setAccountTab(null)
                   setActiveNavTab('shop')
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
                 className={`transition-colors cursor-pointer ${
-                  !accountTab && activeNavTab === 'shop'
+                  !accountTab && !selectedProduct && activeNavTab === 'shop'
                     ? 'text-slate-950 font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
@@ -563,9 +810,12 @@ export function ShoppingDashboard({
                 type="button"
                 id="nav-link-categories"
                 onClick={() => {
+                  setSelectedProduct(null)
                   setAccountTab(null)
-                  setActiveNavTab('shop')
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                  setActiveNavTab('home')
+                  setTimeout(() => {
+                    document.getElementById('categories-section')?.scrollIntoView({ behavior: 'smooth' })
+                  }, 50)
                 }}
                 className="text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
               >
@@ -624,27 +874,32 @@ export function ShoppingDashboard({
             <button
               type="button"
               id="header-notifications-btn"
-              onClick={() => setIsTrackModalOpen(true)}
+              onClick={() => setIsNotificationsOpen(true)}
               className="p-1.5 text-slate-700 hover:text-blue-600 transition-colors relative cursor-pointer"
-              title="Track Orders & Notifications"
+              title="Store & Product Notifications"
               aria-label="Notifications"
             >
               <Bell size={20} />
+              {isMounted && unreadShopNotifsCount > 0 && (
+                <span
+                  suppressHydrationWarning
+                  className="absolute -top-1 -right-1 bg-blue-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-xs animate-pulse"
+                >
+                  {unreadShopNotifsCount}
+                </span>
+              )}
             </button>
 
             {/* Shopping Cart with Signature Orange Badge (e.g. "1") */}
             <button
               type="button"
               id="header-cart-btn"
-              onClick={() => {
-                setAccountTab('cart')
-                window.scrollTo({ top: 0, behavior: 'smooth' })
-              }}
+              onClick={() => setIsCartOpen(true)}
               className="p-1.5 text-slate-700 hover:text-slate-900 transition-colors relative cursor-pointer group"
               title="Shopping Cart"
               aria-label="Shopping Cart"
             >
-              <ShoppingCart size={21} className="group-hover:scale-105 transition-transform" />
+              <ShoppingCart size={20} className="group-hover:scale-105 transition-transform" />
               {isMounted && totalCartItems > 0 && (
                 <span
                   suppressHydrationWarning
@@ -653,6 +908,35 @@ export function ShoppingDashboard({
                   {totalCartItems}
                 </span>
               )}
+            </button>
+
+            {/* Log in Button (Matching Screenshot 1) */}
+            <button
+              type="button"
+              id="header-login-btn"
+              onClick={() => {
+                if (onSwitchToLogin) onSwitchToLogin()
+                else if (onSwitchToSeller) onSwitchToSeller()
+                else onToast('Opening Login Portal')
+              }}
+              className="text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-950 transition-colors cursor-pointer px-2 py-1"
+            >
+              Log in
+            </button>
+
+            {/* Sign up -> Pill Button (Matching Screenshot 1) */}
+            <button
+              type="button"
+              id="header-signup-btn"
+              onClick={() => {
+                if (onSwitchToSignUp) onSwitchToSignUp()
+                else if (onSwitchToSeller) onSwitchToSeller()
+                else onToast('Opening Merchant & Account Registration')
+              }}
+              className="bg-[#0F172A] hover:bg-slate-800 text-white rounded-full px-4 py-2 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+            >
+              <span>Sign up</span>
+              <ArrowRight size={13} />
             </button>
 
             {/* User Profile / Portal Menu Icon Matching Screenshot 1 */}
@@ -772,11 +1056,13 @@ export function ShoppingDashboard({
             window.scrollTo({ top: 0, behavior: 'smooth' })
           }}
           onBecomeSeller={() => {
-            if (onSwitchToSeller) onSwitchToSeller()
+            if (onSwitchToSignUp) onSwitchToSignUp()
+            else if (onSwitchToSeller) onSwitchToSeller()
             else onToast('Opening Merchant Onboarding & Seller Portal')
           }}
           onSellerLogin={() => {
-            if (onSwitchToSeller) onSwitchToSeller()
+            if (onSwitchToLogin) onSwitchToLogin()
+            else if (onSwitchToSeller) onSwitchToSeller()
             else onToast('Opening Seller Console')
           }}
           cart={cart}
@@ -787,7 +1073,15 @@ export function ShoppingDashboard({
           onRemoveFromCart={removeFromCart}
           onAddToCart={(prod, qty) => addToCart(prod, qty)}
           onToggleWishlist={toggleWishlist}
-          onOpenCheckout={() => setIsCheckoutOpen(true)}
+          onOpenCheckout={() => {
+            setSelectedProduct(null)
+            setAccountTab(null)
+            setActiveNavTab('checkout')
+            if (typeof window !== 'undefined') {
+              window.history.pushState(null, '', '/checkout')
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+          }}
           onTrackOrder={(orderNum) => {
             if (orderNum) {
               setTrackQuery(orderNum)
@@ -796,6 +1090,50 @@ export function ShoppingDashboard({
             setIsTrackModalOpen(true)
           }}
           onToast={onToast}
+        />
+      ) : selectedProduct !== null ? (
+        <ProductDetailView
+          product={selectedProduct}
+          allProducts={products}
+          onBackToShop={() => {
+            setSelectedProduct(null)
+            setActiveNavTab('shop')
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          onNavigateHome={() => {
+            setSelectedProduct(null)
+            setActiveNavTab('home')
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          onSelectCategory={(cat) => {
+            setSelectedProduct(null)
+            setSelectedCategory(cat)
+            setActiveNavTab('shop')
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          onSelectProduct={(p) => {
+            setSelectedProduct(p)
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          onAddToCart={(prod, qty, e) => addToCart(prod, qty, e)}
+          onBuyNow={(prod, qty) => {
+            addToCart(prod, qty)
+            setSelectedProduct(null)
+            setAccountTab(null)
+            setActiveNavTab('checkout')
+            if (typeof window !== 'undefined') {
+              window.history.pushState(null, '', '/checkout')
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+          }}
+          wishlist={wishlist}
+          onToggleWishlist={toggleWishlist}
+          onToast={onToast}
+          onSwitchToSeller={onSwitchToSeller}
+          onOpenCart={() => setIsCartOpen(true)}
+          onOpenLogin={onSwitchToLogin || onSwitchToSeller}
+          onOpenSignUp={onSwitchToSignUp || onSwitchToSeller}
+          onTrackOrder={() => setIsTrackModalOpen(true)}
         />
       ) : activeNavTab === 'shop' ? (
         /* SHOP CATALOG VIEW MATCHING USER SCREENSHOT */
@@ -906,7 +1244,7 @@ export function ShoppingDashboard({
 
                           <div
                             className="aspect-square w-full bg-white rounded-xl overflow-hidden flex items-center justify-center cursor-pointer p-1"
-                            onClick={() => setQuickViewProduct(product)}
+                            onClick={() => handleOpenProduct(product)}
                           >
                             <img
                               src={product.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80'}
@@ -931,7 +1269,7 @@ export function ShoppingDashboard({
                         <div className="space-y-1 flex-1 flex flex-col justify-between">
                           <div>
                             <h4
-                              onClick={() => setQuickViewProduct(product)}
+                              onClick={() => handleOpenProduct(product)}
                               className="font-medium text-slate-800 text-xs hover:text-[#0F52BA] line-clamp-2 leading-relaxed min-h-[34px] cursor-pointer transition-colors"
                               title={product.title}
                             >
@@ -1044,8 +1382,8 @@ export function ShoppingDashboard({
                 id="hero-cta-btn"
                 onClick={() => {
                   setSelectedCategory(activeSlideData.category)
-                  const el = document.getElementById('all-products-section')
-                  el?.scrollIntoView({ behavior: 'smooth' })
+                  setActiveNavTab('shop')
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
                 className="inline-flex items-center gap-2 rounded-full bg-white text-slate-900 font-bold text-sm sm:text-base px-6 sm:px-7 py-3 sm:py-3.5 shadow-xl hover:bg-slate-50 transition-all hover:scale-105 active:scale-95 cursor-pointer"
               >
@@ -1086,8 +1424,8 @@ export function ShoppingDashboard({
             id="categories-see-all-btn"
             onClick={() => {
               setSelectedCategory('All')
-              const el = document.getElementById('all-products-section')
-              el?.scrollIntoView({ behavior: 'smooth' })
+              setActiveNavTab('shop')
+              window.scrollTo({ top: 0, behavior: 'smooth' })
             }}
             className="text-sm font-bold text-[#0F52BA] hover:underline flex items-center gap-1 cursor-pointer transition-colors"
           >
@@ -1106,8 +1444,8 @@ export function ShoppingDashboard({
                 id={`category-card-${cat.id}`}
                 onClick={() => {
                   setSelectedCategory(cat.categoryName)
-                  const el = document.getElementById('all-products-section')
-                  el?.scrollIntoView({ behavior: 'smooth' })
+                  setActiveNavTab('shop')
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
                 className={`group flex flex-col items-center cursor-pointer transition-all duration-300 ${
                   isSelected ? 'scale-105' : 'hover:-translate-y-1'
@@ -1183,7 +1521,8 @@ export function ShoppingDashboard({
               id="editors-picks-see-all-btn"
               onClick={() => {
                 setSelectedCategory('All')
-                onToast('Showing all editor products')
+                setActiveNavTab('shop')
+                window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
               className="text-sm font-bold text-[#0F52BA] hover:underline flex items-center gap-1 cursor-pointer transition-colors"
             >
@@ -1260,7 +1599,7 @@ export function ShoppingDashboard({
                   {/* Clean Aspect-Square Product Image */}
                   <div
                     className="relative aspect-square w-full bg-white rounded-xl overflow-hidden flex items-center justify-center cursor-pointer mb-2 p-1"
-                    onClick={() => setQuickViewProduct(product)}
+                    onClick={() => handleOpenProduct(product)}
                   >
                     <img
                       src={product.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80'}
@@ -1274,7 +1613,7 @@ export function ShoppingDashboard({
                   <div className="space-y-1 flex-1 flex flex-col justify-between">
                     <div>
                       <h4
-                        onClick={() => setQuickViewProduct(product)}
+                        onClick={() => handleOpenProduct(product)}
                         className="font-medium text-slate-800 text-xs hover:text-[#0F52BA] line-clamp-2 leading-relaxed min-h-[34px] cursor-pointer transition-colors"
                         title={product.title}
                       >
@@ -1326,69 +1665,120 @@ export function ShoppingDashboard({
         </>
       )}
 
-      {/* Slide-out Shopping Cart Drawer */}
+      {/* Slide-out Shopping Cart Drawer (Exact match to User Screenshot) */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity" onClick={() => setIsCartOpen(false)} />
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col">
-              <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-blue-50 text-[#0F52BA]">
-                    <ShoppingCart size={18} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-base">Your Cart</h3>
-                    <p className="text-xs text-slate-500">{totalCartItems} item(s) in bag</p>
-                  </div>
-                </div>
-                <button type="button" onClick={() => setIsCartOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-700 cursor-pointer">
+        <div className="fixed inset-0 z-50 overflow-hidden animate-in fade-in duration-200">
+          {/* Dark Backdrop Overlay */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity cursor-pointer"
+            onClick={() => setIsCartOpen(false)}
+            aria-hidden="true"
+          />
+
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-8 sm:pl-10">
+            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
+              {/* Header Matching Screenshot: "Your Cart (X)" & Close "X" */}
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight">
+                  Your Cart ({totalCartItems})
+                </h3>
+                <button
+                  type="button"
+                  id="close-cart-drawer-btn"
+                  onClick={() => setIsCartOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                  aria-label="Close cart"
+                >
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {/* Cart Items List */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3.5">
                 {cart.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4">
                     <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
                       <ShoppingBag size={28} />
                     </div>
-                    <h4 className="font-bold text-slate-800 text-base">Your bag is empty</h4>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-slate-900 text-base">Your cart is empty</h4>
+                      <p className="text-xs text-slate-500">Discover top trending items and add them to your cart.</p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setIsCartOpen(false)}
-                      className="px-5 py-2 bg-[#0F52BA] text-white font-bold text-xs rounded-full shadow-xs hover:bg-blue-700 cursor-pointer"
+                      onClick={() => {
+                        setIsCartOpen(false)
+                        setSelectedProduct(null)
+                        setActiveNavTab('shop')
+                      }}
+                      className="px-6 py-2.5 bg-[#1E4E79] hover:bg-[#163c5e] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                     >
                       Start Shopping
                     </button>
                   </div>
                 ) : (
                   cart.map(({ product, quantity }) => (
-                    <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                      {product.image && product.image.trim() ? (
-                        <img src={product.image} alt={product.title} className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0 bg-white" />
-                      ) : (
-                        <div className="w-16 h-16 rounded-xl border border-slate-200 shrink-0 bg-slate-100 flex items-center justify-center text-slate-300">
-                          <Package size={20} />
+                    <div
+                      key={product.id}
+                      className="bg-white rounded-2xl border border-slate-200/90 p-3 flex items-center gap-3.5 shadow-2xs hover:border-slate-300 transition-all"
+                    >
+                      {/* Thumbnail Image matching screenshot */}
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border border-slate-100 bg-white p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                        {product.image && product.image.trim() ? (
+                          <img
+                            src={product.image}
+                            alt={product.title}
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <Package size={22} className="text-slate-300" />
+                        )}
+                      </div>
+
+                      {/* Title, Price & Stepper matching screenshot */}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <h4
+                          className="font-medium text-xs sm:text-sm text-slate-900 truncate leading-snug"
+                          title={product.title}
+                        >
+                          {product.title}
+                        </h4>
+                        <div className="font-extrabold text-sm text-slate-900">
+                          ${Number(product.sell).toFixed(2)}
                         </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h5 className="font-bold text-xs text-slate-900 truncate">{product.title}</h5>
-                        <p className="text-[11px] text-slate-500">${Number(product.sell).toFixed(2)} each</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <div className="flex items-center bg-white border border-slate-200 rounded-lg overflow-hidden">
-                            <button type="button" onClick={() => updateCartQuantity(product.id, -1)} className="p-1 hover:bg-slate-100 cursor-pointer">
-                              <Minus size={12} />
-                            </button>
-                            <span className="px-2 text-xs font-bold text-slate-800">{quantity}</span>
-                            <button type="button" onClick={() => updateCartQuantity(product.id, 1)} className="p-1 hover:bg-slate-100 cursor-pointer">
-                              <Plus size={12} />
-                            </button>
-                          </div>
-                          <span className="text-xs font-black text-slate-900 ml-auto">${(Number(product.sell) * quantity).toFixed(2)}</span>
+
+                        {/* Stepper [- 1 +] matching screenshot */}
+                        <div className="inline-flex items-center border border-slate-200 rounded-lg bg-white overflow-hidden shadow-2xs mt-1">
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(product.id, -1)}
+                            className="px-2 py-0.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                            aria-label="Decrease quantity"
+                          >
+                            <Minus size={11} strokeWidth={2.5} />
+                          </button>
+                          <span className="px-2 text-xs font-bold text-slate-800 select-none min-w-[18px] text-center">
+                            {quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(product.id, 1)}
+                            className="px-2 py-0.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                            aria-label="Increase quantity"
+                          >
+                            <Plus size={11} strokeWidth={2.5} />
+                          </button>
                         </div>
                       </div>
-                      <button type="button" onClick={() => removeFromCart(product.id)} className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer">
+
+                      {/* Trash Delete Icon on Right matching screenshot */}
+                      <button
+                        type="button"
+                        onClick={() => removeFromCart(product.id)}
+                        className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0 ml-auto"
+                        title="Remove from cart"
+                        aria-label="Remove item"
+                      >
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -1396,34 +1786,48 @@ export function ShoppingDashboard({
                 )}
               </div>
 
+              {/* Bottom Footer: Subtotal, Proceed to Checkout, View Full Cart */}
               {cart.length > 0 && (
-                <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3">
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between text-slate-600">
-                      <span>Subtotal</span>
-                      <span className="font-semibold text-slate-900">${subtotal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span>Estimated Tax</span>
-                      <span>${taxAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-black text-slate-900">
-                      <span>Total</span>
-                      <span className="text-[#0F52BA] text-base">${grandTotal.toFixed(2)}</span>
-                    </div>
+                <div className="p-6 border-t border-slate-100 bg-white space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600">Subtotal</span>
+                    <span className="text-base font-extrabold text-slate-900 tabular-nums">
+                      ${subtotal.toFixed(2)}
+                    </span>
                   </div>
 
+                  {/* Navy Blue "Proceed to Checkout" Button matching screenshot */}
                   <button
                     type="button"
-                    id="cart-proceed-checkout-btn"
+                    id="cart-drawer-checkout-btn"
                     onClick={() => {
                       setIsCartOpen(false)
-                      setIsCheckoutOpen(true)
+                      setSelectedProduct(null)
+                      setAccountTab(null)
+                      setActiveNavTab('checkout')
+                      if (typeof window !== 'undefined') {
+                        window.history.pushState(null, '', '/checkout')
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                      }
                     }}
-                    className="w-full py-3 bg-[#0F52BA] hover:bg-blue-700 text-white rounded-full font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    className="w-full py-3.5 bg-[#1E4E79] hover:bg-[#163c5e] active:scale-[0.99] text-white rounded-xl font-bold text-sm shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
                     <span>Proceed to Checkout</span>
-                    <ArrowRight size={16} />
+                  </button>
+
+                  {/* Secondary "View Full Cart" Button matching screenshot */}
+                  <button
+                    type="button"
+                    id="cart-drawer-view-full-btn"
+                    onClick={() => {
+                      setIsCartOpen(false)
+                      setSelectedProduct(null)
+                      setAccountTab('cart')
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
+                    className="w-full py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 rounded-xl font-semibold text-sm transition-colors cursor-pointer flex items-center justify-center shadow-2xs"
+                  >
+                    View Full Cart
                   </button>
                 </div>
               )}
@@ -1648,6 +2052,21 @@ export function ShoppingDashboard({
         </div>
       )}
 
+      {/* Storefront Product & Store Notifications Drawer */}
+      <ShopNotificationsDrawer
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        notifications={shopNotifications}
+        onMarkAsRead={handleMarkShopNotifAsRead}
+        onMarkAllAsRead={handleMarkAllShopNotifsAsRead}
+        onDeleteNotification={handleDeleteShopNotif}
+        onSelectProduct={handleOpenProduct}
+        allProducts={products}
+        onApplyPromoCode={handleApplyPromoFromNotif}
+        onOpenOrderTracker={() => setIsTrackModalOpen(true)}
+        onToast={onToast}
+      />
+
       {/* Customer Live Order Tracking Modal */}
       {isTrackModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs">
@@ -1849,7 +2268,12 @@ export function ShoppingDashboard({
                   <button
                     type="button"
                     onClick={() => {
-                      document.getElementById('categories-section')?.scrollIntoView({ behavior: 'smooth' })
+                      setSelectedProduct(null)
+                      setAccountTab(null)
+                      setActiveNavTab('home')
+                      setTimeout(() => {
+                        document.getElementById('categories-section')?.scrollIntoView({ behavior: 'smooth' })
+                      }, 50)
                     }}
                     className="hover:text-white transition-colors cursor-pointer"
                   >
@@ -1883,10 +2307,7 @@ export function ShoppingDashboard({
                 <li>
                   <button
                     type="button"
-                    onClick={() => {
-                      setAccountTab('cart')
-                      window.scrollTo({ top: 0, behavior: 'smooth' })
-                    }}
+                    onClick={() => setIsCartOpen(true)}
                     className="hover:text-white transition-colors cursor-pointer"
                   >
                     Cart ({totalCartItems})
@@ -1903,7 +2324,8 @@ export function ShoppingDashboard({
                   <button
                     type="button"
                     onClick={() => {
-                      if (onSwitchToSeller) onSwitchToSeller()
+                      if (onSwitchToLogin) onSwitchToLogin()
+                      else if (onSwitchToSeller) onSwitchToSeller()
                       else onToast('Sign in via top-right account icon')
                     }}
                     className="hover:text-white transition-colors cursor-pointer"
@@ -1915,7 +2337,8 @@ export function ShoppingDashboard({
                   <button
                     type="button"
                     onClick={() => {
-                      if (onSwitchToSeller) onSwitchToSeller()
+                      if (onSwitchToSignUp) onSwitchToSignUp()
+                      else if (onSwitchToSeller) onSwitchToSeller()
                       else onToast('Register as a merchant in Seller Console')
                     }}
                     className="hover:text-white transition-colors cursor-pointer"
@@ -1963,10 +2386,9 @@ export function ShoppingDashboard({
                   type="button"
                   id="footer-become-seller-btn"
                   onClick={() => {
-                    if (onSwitchToSeller) {
-                      onSwitchToSeller()
-                      onToast('Opening Merchant Onboarding & Seller Portal')
-                    }
+                    if (onSwitchToSignUp) onSwitchToSignUp()
+                    else if (onSwitchToSeller) onSwitchToSeller()
+                    else onToast('Opening Merchant Onboarding & Seller Portal')
                   }}
                   className="px-4 py-2 rounded-xl bg-[#3B82F6] hover:bg-blue-600 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                 >
@@ -1977,10 +2399,9 @@ export function ShoppingDashboard({
                   type="button"
                   id="footer-seller-login-btn"
                   onClick={() => {
-                    if (onSwitchToSeller) {
-                      onSwitchToSeller()
-                      onToast('Opening Seller Console')
-                    }
+                    if (onSwitchToLogin) onSwitchToLogin()
+                    else if (onSwitchToSeller) onSwitchToSeller()
+                    else onToast('Opening Seller Console')
                   }}
                   className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-bold text-xs border border-slate-700/90 transition-all cursor-pointer active:scale-95"
                 >

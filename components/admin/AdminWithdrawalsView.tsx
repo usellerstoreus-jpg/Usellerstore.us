@@ -371,13 +371,21 @@ export function AdminWithdrawalsView({
         timeAgo: 'Just now',
         refCode,
         type: 'payout' as const,
+        category: 'store' as const,
+        targetRole: 'all' as const,
+        sellerId: item.sellerId,
+        sellerEmail: item.email,
+        shopName: item.shopName,
         read: false,
         details: finalMessage,
       }
-      const stored = localStorage.getItem('u_seller_notifications')
+      const stored = localStorage.getItem('u_all_notifications') || localStorage.getItem('u_seller_notifications')
       const list = stored ? JSON.parse(stored) : []
-      localStorage.setItem('u_seller_notifications', JSON.stringify([newNotif, ...list]))
+      const updated = [newNotif, ...list]
+      localStorage.setItem('u_all_notifications', JSON.stringify(updated))
+      localStorage.setItem('u_seller_notifications', JSON.stringify(updated))
       window.dispatchEvent(new CustomEvent('u_seller_notifications_update', { detail: { notification: newNotif } }))
+      window.dispatchEvent(new CustomEvent('u_admin_notifications_update', { detail: { notification: newNotif } }))
     } catch {}
 
     // Record activity log
@@ -445,7 +453,7 @@ export function AdminWithdrawalsView({
       console.warn('[AdminWithdrawals] Supabase reject sync warning:', dbErr)
     }
 
-    // Notify seller
+    // Notify seller and admin feed
     try {
       const newNotif = {
         id: `notif-wd-rej-${Date.now()}`,
@@ -455,13 +463,21 @@ export function AdminWithdrawalsView({
         timeAgo: 'Just now',
         refCode: `WD-${rejectingItem.id.slice(-6).toUpperCase()}`,
         type: 'payout' as const,
+        category: 'store' as const,
+        targetRole: 'all' as const,
+        sellerId: rejectingItem.sellerId,
+        sellerEmail: rejectingItem.email,
+        shopName: rejectingItem.shopName,
         read: false,
         details: `Reason: "${reason}". Please verify your settlement details or contact merchant support.`,
       }
-      const stored = localStorage.getItem('u_seller_notifications')
+      const stored = localStorage.getItem('u_all_notifications') || localStorage.getItem('u_seller_notifications')
       const list = stored ? JSON.parse(stored) : []
-      localStorage.setItem('u_seller_notifications', JSON.stringify([newNotif, ...list]))
+      const updatedList = [newNotif, ...list]
+      localStorage.setItem('u_all_notifications', JSON.stringify(updatedList))
+      localStorage.setItem('u_seller_notifications', JSON.stringify(updatedList))
       window.dispatchEvent(new CustomEvent('u_seller_notifications_update', { detail: { notification: newNotif } }))
+      window.dispatchEvent(new CustomEvent('u_admin_notifications_update', { detail: { notification: newNotif } }))
     } catch {}
 
     // Record activity log
@@ -639,13 +655,21 @@ export function AdminWithdrawalsView({
           timeAgo: 'Just now',
           refCode: `WD-${newItem.id.slice(-6).toUpperCase()}`,
           type: 'payout' as const,
+          category: 'store' as const,
+          targetRole: 'all' as const,
+          sellerId: newItem.sellerId,
+          sellerEmail: newItem.email,
+          shopName: newItem.shopName,
           read: false,
           details: `Withdrawal request for $${amt.toFixed(2)} has entered the pending queue. ${newNotes ? `Note: "${newNotes}"` : ''}`,
         }
-        const stored = localStorage.getItem('u_seller_notifications')
+        const stored = localStorage.getItem('u_all_notifications') || localStorage.getItem('u_seller_notifications')
         const list = stored ? JSON.parse(stored) : []
-        localStorage.setItem('u_seller_notifications', JSON.stringify([notif, ...list]))
+        const updatedList = [notif, ...list]
+        localStorage.setItem('u_all_notifications', JSON.stringify(updatedList))
+        localStorage.setItem('u_seller_notifications', JSON.stringify(updatedList))
         window.dispatchEvent(new CustomEvent('u_seller_notifications_update', { detail: { notification: notif } }))
+        window.dispatchEvent(new CustomEvent('u_admin_notifications_update', { detail: { notification: notif } }))
       } catch {}
     }
 

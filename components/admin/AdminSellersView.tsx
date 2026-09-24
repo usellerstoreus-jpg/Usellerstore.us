@@ -606,19 +606,27 @@ export function AdminSellersView({
       timeAgo: 'Just now',
       refCode: 'ADM-' + Math.floor(100000 + Math.random() * 900000),
       type: notifType,
+      category: 'store',
+      targetRole: 'all',
+      sellerId: selectedSeller.id,
+      sellerEmail: selectedSeller.email,
+      shopName: selectedSeller.shopName,
       read: false,
       details: notifDesc.trim(),
     }
 
     await createNotification(newNotif)
 
-    // Also push to local storage notification cache for the seller
+    // Push to master storage and dispatch live updates for seller and admin
     try {
       if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('u_seller_notifications')
+        const stored = localStorage.getItem('u_all_notifications') || localStorage.getItem('u_seller_notifications')
         const list = stored ? JSON.parse(stored) : []
-        localStorage.setItem('u_seller_notifications', JSON.stringify([newNotif, ...list]))
+        const updated = [newNotif, ...list]
+        localStorage.setItem('u_all_notifications', JSON.stringify(updated))
+        localStorage.setItem('u_seller_notifications', JSON.stringify(updated))
         window.dispatchEvent(new CustomEvent('u_seller_notifications_update', { detail: { notification: newNotif } }))
+        window.dispatchEvent(new CustomEvent('u_admin_notifications_update', { detail: { notification: newNotif } }))
       }
     } catch {}
 

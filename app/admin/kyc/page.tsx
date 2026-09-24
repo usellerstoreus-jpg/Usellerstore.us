@@ -39,6 +39,7 @@ import {
   Building2,
   ShieldAlert
 } from 'lucide-react'
+import { dispatchNotification } from '@/lib/notifications'
 
 const adminNav = [
   { label: 'Dashboard', icon: Grid2X2, group: 'Manage' },
@@ -136,6 +137,19 @@ export default function AdminKycPage() {
           }
         }
       } catch {}
+
+      // Dispatch store update notification to seller and admin
+      dispatchNotification({
+        title: 'Store KYC Verified & Approved ✅',
+        description: `Store "${target?.shopName || 'Merchant'}" KYC verification has been approved.`,
+        details: `Administrator approved identity and business documents for ${target?.ownerName || 'Merchant'}. Store is now fully verified.`,
+        category: 'store',
+        type: 'kyc',
+        targetRole: 'all',
+        sellerId: target?.id,
+        sellerEmail: target?.email,
+        shopName: target?.shopName,
+      }).catch(() => {})
     } else {
       throw new Error('Database update failed')
     }
@@ -180,6 +194,19 @@ export default function AdminKycPage() {
           }
         }
       } catch {}
+
+      // Dispatch store update notification to seller and admin
+      dispatchNotification({
+        title: 'Store KYC Action Required ⚠️',
+        description: `Store "${target?.shopName || 'Merchant'}" KYC verification was rejected.`,
+        details: `Reason: ${reason || 'Document details not clear or invalid.'}. Please upload updated credentials.`,
+        category: 'store',
+        type: 'kyc',
+        targetRole: 'all',
+        sellerId: target?.id,
+        sellerEmail: target?.email,
+        shopName: target?.shopName,
+      }).catch(() => {})
     } else {
       throw new Error('Database update failed')
     }
@@ -294,6 +321,8 @@ export default function AdminKycPage() {
                       // already here
                     } else if (label === 'Support') {
                       router.push('/admin/support')
+                    } else if (label === 'Withdrawals') {
+                      router.push('/admin/withdrawals')
                     } else if (label === 'Recent Actions' || label === 'My Logs') {
                       router.push(`/admin/activity?tab=${encodeURIComponent(label)}`)
                     } else {

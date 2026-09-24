@@ -34,7 +34,7 @@ import {
   RefreshCw,
   Menu,
   X,
-  Check,
+  Check
 } from 'lucide-react'
 
 const adminNav = [
@@ -212,6 +212,8 @@ export default function AdminActivityPage() {
                       router.push('/admin/kyc')
                     } else if (label === 'Support') {
                       router.push('/admin/support')
+                    } else if (label === 'Withdrawals') {
+                      router.push('/admin/withdrawals')
                     } else if (label === 'Recent Actions' || label === 'My Logs') {
                       router.push(`/admin/activity?tab=${encodeURIComponent(label)}`)
                     } else {

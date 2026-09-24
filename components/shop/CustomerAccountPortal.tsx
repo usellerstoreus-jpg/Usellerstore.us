@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Home,
   LayoutGrid,
@@ -86,6 +86,63 @@ export function CustomerAccountPortal({
     }
     return defaultCustomerProfile
   })
+
+  // Real-time stored orders syncing from localStorage
+  const [storedOrders, setStoredOrders] = useState<Order[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('u_seller_orders')
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (Array.isArray(parsed)) return parsed
+        }
+      } catch {}
+    }
+    return []
+  })
+
+  useEffect(() => {
+    const syncOrders = () => {
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          try {
+            const saved = localStorage.getItem('u_seller_orders')
+            if (saved) {
+              const parsed = JSON.parse(saved)
+              if (Array.isArray(parsed)) setStoredOrders(parsed)
+            }
+          } catch {}
+        }
+      }, 0)
+    }
+    window.addEventListener('u_seller_orders_update', syncOrders)
+    window.addEventListener('storage', syncOrders)
+    return () => {
+      window.removeEventListener('u_seller_orders_update', syncOrders)
+      window.removeEventListener('storage', syncOrders)
+    }
+  }, [])
+
+  // Merge recentOrders prop with storedOrders so newly placed orders always show immediately
+  const effectiveOrders = useMemo(() => {
+    const map = new Map<string, Order>()
+    // Add props orders first
+    recentOrders.forEach((o) => {
+      if (o && (o.id || o.orderNumber)) {
+        map.set(o.id || o.orderNumber, o)
+      }
+    })
+    // Merge stored orders from localStorage
+    storedOrders.forEach((o) => {
+      if (o && (o.id || o.orderNumber)) {
+        const key = o.id || o.orderNumber
+        if (!map.has(key)) {
+          map.set(key, o)
+        }
+      }
+    })
+    return Array.from(map.values())
+  }, [recentOrders, storedOrders])
 
   // Modals for the 4 Settings Rows
   const [activeModal, setActiveModal] = useState<
@@ -614,7 +671,7 @@ export function CustomerAccountPortal({
                 </p>
               </div>
 
-              {recentOrders.length === 0 ? (
+              {effectiveOrders.length === 0 ? (
                 /* Empty state matching Screenshot 2 */
                 <div className="border border-slate-200/90 rounded-2xl p-16 flex items-center justify-center min-h-[340px] bg-white shadow-2xs">
                   <p className="text-sm text-slate-600">
@@ -632,7 +689,7 @@ export function CustomerAccountPortal({
               ) : (
                 /* Orders List */
                 <div className="space-y-4">
-                  {recentOrders.map((order) => (
+                  {effectiveOrders.map((order) => (
                     <div
                       key={order.id}
                       className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4"

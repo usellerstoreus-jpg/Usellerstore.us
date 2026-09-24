@@ -19,6 +19,8 @@ import {
 import { isSupabaseConfigured } from '@/lib/supabase/client'
 import { AdminSellersView } from '@/components/admin/AdminSellersView'
 import { BrandLogo } from '@/components/ui/BrandLogo'
+import { AdminInviteWidget } from '@/components/admin/AdminInviteWidget'
+import { signOutAdmin } from '@/lib/admin-invite'
 import {
   Grid2X2,
   Users,
@@ -181,16 +183,10 @@ export default function AdminSellersPage() {
         </div>
 
         {/* Invite Code Widget */}
-        <div className="invite mx-3.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs text-slate-600">
-          <span className="text-[11px] text-slate-400 font-semibold tracking-wider">
-            INVITE <b className="text-slate-900 font-bold ml-1.5 text-xs">MXSVHSDL</b>
-          </span>
-          <div className="flex items-center gap-2 text-slate-400">
-            <Copy size={13} className="hover:text-slate-700 cursor-pointer transition-colors" onClick={() => showToast('Invite code copied')} />
-            <Pencil size={13} className="hover:text-slate-700 cursor-pointer transition-colors" onClick={() => showToast('Edit invite code')} />
-            <RefreshCw size={13} className="hover:text-slate-700 cursor-pointer transition-colors" onClick={() => showToast('Refreshed invite code')} />
-          </div>
-        </div>
+        <AdminInviteWidget
+          className="mx-3.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100"
+          onToast={showToast}
+        />
 
         {/* Nav Links */}
         <nav className="admin-nav flex-1 overflow-y-auto p-3 space-y-1" aria-label="Admin navigation">
@@ -223,6 +219,8 @@ export default function AdminSellersPage() {
                       router.push('/admin/kyc')
                     } else if (label === 'Support') {
                       router.push('/admin/support')
+                    } else if (label === 'Withdrawals') {
+                      router.push('/admin/withdrawals')
                     } else if (label === 'Recent Actions' || label === 'My Logs') {
                       router.push(`/admin/activity?tab=${encodeURIComponent(label)}`)
                     } else {
@@ -246,7 +244,10 @@ export default function AdminSellersPage() {
           <button
             type="button"
             className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
-            onClick={() => router.push('/')}
+            onClick={() => {
+              signOutAdmin()
+              router.push('/')
+            }}
           >
             <LogOut size={16} />
             <span>Sign Out</span>

@@ -35,6 +35,8 @@ import {
   XCircle,
   MoreVertical,
   CheckCircle2,
+  AlarmClock,
+  Calendar,
 } from 'lucide-react'
 import { Product, Order, SellerProfile, shopCategories } from '@/lib/mock-data'
 
@@ -134,7 +136,7 @@ interface SelectedItem {
 interface ScheduleHistoryItem {
   id: string
   title: string
-  status: 'Failed' | 'Cancelled'
+  status: 'Failed' | 'Cancelled' | 'Completed'
   target: string
   dateStr: string
   timeStr: string
@@ -148,6 +150,69 @@ interface ScheduleHistoryItem {
     errorMessage: string
     time: string
   }[]
+}
+
+export interface ScheduledStatusItem {
+  id: string
+  orderIds: string[]
+  targetStatus: Order['status']
+  targetSellerId: string
+  sellerShopName?: string
+  executeAt: number
+  createdAt: number
+  dateStr: string
+  timeStr: string
+  totalOrders: number
+  status: 'Upcoming' | 'Completed' | 'Cancelled'
+}
+
+export const SCHEDULE_TARGET_STATUSES: { id: Order['status']; label: string; desc: string }[] = [
+  { id: 'on_the_way', label: 'On the way', desc: 'Mark as delivering' },
+  { id: 'pickup', label: 'Pickup', desc: 'Mark as ready for pickup' },
+  { id: 'out_for_delivery', label: 'Out for delivery', desc: 'Out for final delivery' },
+  { id: 'delivered', label: 'Delivered', desc: 'Complete order & release profit' },
+  { id: 'cancelled', label: 'Cancelled', desc: 'Cancel order' },
+]
+
+export const TIMER_PRESETS = [
+  { label: '15m', h: 0, m: 15 },
+  { label: '30m', h: 0, m: 30 },
+  { label: '1h', h: 1, m: 0 },
+  { label: '2h', h: 2, m: 0 },
+  { label: '4h', h: 4, m: 0 },
+  { label: '8h', h: 8, m: 0 },
+  { label: '1d', h: 24, m: 0 },
+]
+
+function getOrdinalSuffix(day: number) {
+  if (day > 3 && day < 21) return 'th'
+  switch (day % 10) {
+    case 1: return 'st'
+    case 2: return 'nd'
+    case 3: return 'rd'
+    default: return 'th'
+  }
+}
+
+function formatRunAt(date: Date): string {
+  const month = date.toLocaleDateString('en-US', { month: 'long' })
+  const day = date.getDate()
+  const suffix = getOrdinalSuffix(day)
+  const year = date.getFullYear()
+
+  let hours = date.getHours()
+  const minutes = date.getMinutes().toString().padStart(2, '0')
+  const ampm = hours >= 12 ? 'PM' : 'AM'
+  hours = hours % 12 || 12
+
+  let tz = 'PKT'
+  try {
+    const parts = Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(date)
+    const tzPart = parts.find((p) => p.type === 'timeZoneName')
+    if (tzPart) tz = tzPart.value
+  } catch {}
+
+  return `Will run at ${month} ${day}${suffix}, ${year} at ${hours}:${minutes} ${ampm} (${tz})`
 }
 
 const mockScheduleHistory: ScheduleHistoryItem[] = []
@@ -177,6 +242,26 @@ export function AdminOrdersView({
   const [isSchedulesViewActive, setIsSchedulesViewActive] = useState(false)
   const [schedulesSubTab, setSchedulesSubTab] = useState<'upcoming' | 'history'>('upcoming')
   const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null)
+
+  // Schedule Status Change modal state (Screenshots 1 & 2)
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
+  const [scheduleTargetStatus, setScheduleTargetStatus] = useState<Order['status']>('on_the_way')
+  const [isTargetStatusDropdownOpen, setIsTargetStatusDropdownOpen] = useState(false)
+  const [whenToRunMode, setWhenToRunMode] = useState<'timer' | 'datetime'>('timer')
+  const [timerHours, setTimerHours] = useState<number>(1)
+  const [timerMinutes, setTimerMinutes] = useState<number>(0)
+  const [customScheduleDate, setCustomScheduleDate] = useState(() => {
+    const d = new Date()
+    return d.toISOString().split('T')[0]
+  })
+  const [customScheduleTime, setCustomScheduleTime] = useState(() => {
+    const d = new Date(Date.now() + 3600000)
+    const hh = d.getHours().toString().padStart(2, '0')
+    const mm = d.getMinutes().toString().padStart(2, '0')
+    return `${hh}:${mm}`
+  })
+  const [scheduledRuns, setScheduledRuns] = useState<ScheduledStatusItem[]>([])
+  const [scheduleHistoryList, setScheduleHistoryList] = useState<ScheduleHistoryItem[]>([])
 
   // Modals & Inspection (Screenshot 2)
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null)
@@ -251,6 +336,131 @@ export function AdminOrdersView({
       }
     } catch {}
   }, [])
+
+  // Calculated run date matching Screenshot 2
+  const calculatedRunDate = useMemo(() => {
+    if (whenToRunMode === 'timer') {
+      const ms = (Math.max(0, Number(timerHours) || 0) * 3600 + Math.max(0, Number(timerMinutes) || 0) * 60) * 1000
+      return new Date(Date.now() + ms)
+    } else {
+      const dt = new Date(`${customScheduleDate}T${customScheduleTime}`)
+      return isNaN(dt.getTime()) ? new Date() : dt
+    }
+  }, [whenToRunMode, timerHours, timerMinutes, customScheduleDate, customScheduleTime])
+
+  // Load scheduled runs & history from localStorage
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const storedSched = localStorage.getItem('u_order_schedules')
+        if (storedSched) {
+          const parsed = JSON.parse(storedSched)
+          if (Array.isArray(parsed)) setScheduledRuns(parsed)
+        }
+        const storedHist = localStorage.getItem('u_schedule_history')
+        if (storedHist) {
+          const parsed = JSON.parse(storedHist)
+          if (Array.isArray(parsed)) setScheduleHistoryList(parsed)
+        }
+      }
+    } catch {}
+  }, [])
+
+  // Auto-executor for scheduled runs
+  useEffect(() => {
+    if (scheduledRuns.length === 0) return
+
+    const timer = setInterval(() => {
+      const now = Date.now()
+      let updatedRuns = [...scheduledRuns]
+      let changed = false
+
+      for (let i = 0; i < updatedRuns.length; i++) {
+        const item = updatedRuns[i]
+        if (now >= item.executeAt && item.status === 'Upcoming') {
+          // Execute status change on all assigned orders
+          item.orderIds.forEach((orderId) => {
+            onUpdateOrderStatus(orderId, item.targetStatus, item.targetSellerId)
+          })
+          onToast(`⏰ Executed schedule: ${item.orderIds.length} orders updated to ${getStatusLabel(item.targetStatus)}!`)
+
+          // Save completed record to history
+          const histRecord: ScheduleHistoryItem = {
+            id: item.id,
+            title: `Updated ${item.orderIds.length} orders to ${getStatusLabel(item.targetStatus)}`,
+            status: 'Completed',
+            target: getStatusLabel(item.targetStatus),
+            dateStr: item.dateStr,
+            timeStr: item.timeStr,
+            totalOrders: item.totalOrders,
+            successCount: item.totalOrders,
+            failCount: 0,
+            retryCount: 0,
+            errors: [],
+          }
+          setScheduleHistoryList((prevHist) => {
+            const newHist = [histRecord, ...prevHist]
+            try {
+              localStorage.setItem('u_schedule_history', JSON.stringify(newHist))
+            } catch {}
+            return newHist
+          })
+
+          updatedRuns.splice(i, 1)
+          i--
+          changed = true
+        }
+      }
+
+      if (changed) {
+        setScheduledRuns(updatedRuns)
+        try {
+          localStorage.setItem('u_order_schedules', JSON.stringify(updatedRuns))
+        } catch {}
+      }
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [scheduledRuns, onUpdateOrderStatus, onToast])
+
+  const handleScheduleSubmit = () => {
+    if (checkedOrderIds.length === 0) {
+      onToast('No orders selected.')
+      return
+    }
+
+    const runTimestamp = calculatedRunDate.getTime()
+    const targetStatusObj = SCHEDULE_TARGET_STATUSES.find((s) => s.id === scheduleTargetStatus) || SCHEDULE_TARGET_STATUSES[0]
+
+    const newRun: ScheduledStatusItem = {
+      id: `sched-${Date.now()}`,
+      orderIds: [...checkedOrderIds],
+      targetStatus: scheduleTargetStatus,
+      targetSellerId: selectedSeller?.id || selectedSellerId || '',
+      sellerShopName: selectedSeller?.shopName || 'Store',
+      executeAt: runTimestamp,
+      createdAt: Date.now(),
+      dateStr: calculatedRunDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
+      timeStr: calculatedRunDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      totalOrders: checkedOrderIds.length,
+      status: 'Upcoming',
+    }
+
+    setScheduledRuns((prev) => {
+      const updated = [...prev, newRun]
+      try {
+        localStorage.setItem('u_order_schedules', JSON.stringify(updated))
+      } catch {}
+      return updated
+    })
+
+    const hoursText = timerHours > 0 ? `${timerHours}h ` : ''
+    const minsText = `${timerMinutes}m`
+    onToast(`Scheduled status change to "${targetStatusObj.label}" for ${checkedOrderIds.length} orders in ${hoursText}${minsText}!`)
+
+    setIsScheduleModalOpen(false)
+    setCheckedOrderIds([])
+  }
 
   // Step-by-Step Delivery Progression runner:
   // Automatically completes stages from top to delivered: Pending -> Pickup -> On The Way -> Out For Delivery -> Delivered
@@ -428,6 +638,13 @@ export function AdminOrdersView({
     }
     return result
   }, [orders, selectedSellerId, sellersList, sellerProfile, orderSearch])
+
+  // Automatically select the store's orders when store is selected so schedule banner pops up below (Screenshot 1)
+  useEffect(() => {
+    if (selectedSellerId && sellerOrders.length > 0) {
+      setCheckedOrderIds(sellerOrders.map((o) => o.id))
+    }
+  }, [selectedSellerId, sellerOrders.length])
 
   // Products filtering for Step 2
   const filteredProducts = useMemo(() => {
@@ -1390,22 +1607,78 @@ export function AdminOrdersView({
             </button>
           </div>
 
-          {/* Upcoming Tab (Screenshot 3) */}
+          {/* Upcoming Tab (Screenshot 3 & Active schedules) */}
           {schedulesSubTab === 'upcoming' && (
-            <div className="rounded-2xl border border-dashed border-slate-200/90 p-16 text-center text-xs text-slate-500 bg-white/50 min-h-[300px] flex items-center justify-center shadow-xs">
-              No upcoming schedules. Pick orders and click Schedule status change.
-            </div>
+            scheduledRuns.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200/90 p-16 text-center text-xs text-slate-500 bg-white/50 min-h-[300px] flex items-center justify-center shadow-xs">
+                No upcoming schedules. Pick orders and click Schedule status change.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {scheduledRuns.map((run) => {
+                  const targetStatusObj = SCHEDULE_TARGET_STATUSES.find((s) => s.id === run.targetStatus)
+                  const targetLabel = targetStatusObj?.label || run.targetStatus
+                  return (
+                    <div
+                      key={run.id}
+                      className="bg-white border border-slate-200/90 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs hover:border-slate-300 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-[#5443ED] flex items-center justify-center shrink-0">
+                          <AlarmClock size={20} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-sm text-slate-900">
+                              Update {run.orderIds.length} orders
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                              Upcoming
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                              → {targetLabel}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-slate-700">{run.sellerShopName}</span>
+                            <span>•</span>
+                            <span>Runs on {run.dateStr} at {run.timeStr}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const filtered = scheduledRuns.filter((r) => r.id !== run.id)
+                            setScheduledRuns(filtered)
+                            try {
+                              localStorage.setItem('u_order_schedules', JSON.stringify(filtered))
+                            } catch {}
+                            onToast('Scheduled run cancelled.')
+                          }}
+                          className="px-3 py-1.5 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
           )}
 
           {/* History Tab */}
           {schedulesSubTab === 'history' && (
             <div className="space-y-3">
-              {mockScheduleHistory.length === 0 ? (
+              {scheduleHistoryList.length === 0 && mockScheduleHistory.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200/90 p-16 text-center text-xs text-slate-500 bg-white/50 min-h-[300px] flex items-center justify-center shadow-xs">
                   No automated schedule history yet. Pick orders and click Schedule status change.
                 </div>
               ) : (
-                mockScheduleHistory.map((item) => {
+                [...scheduleHistoryList, ...mockScheduleHistory].map((item) => {
                 const isExpanded = expandedScheduleId === item.id
                 return (
                   <div
@@ -1504,7 +1777,17 @@ export function AdminOrdersView({
               return (
                 <div
                   key={seller.id}
-                  onClick={() => setSelectedSellerId(seller.id)}
+                  onClick={() => {
+                    setSelectedSellerId(seller.id)
+                    setTargetSellerId(seller.id)
+                    const forThis = orders.filter((o) => {
+                      if (o.sellerId) {
+                        return o.sellerId === seller.id || o.sellerId === seller.shopName || o.sellerId === seller.ownerName
+                      }
+                      return seller.id === sellersList[0]?.id
+                    })
+                    setCheckedOrderIds(forThis.map((o) => o.id))
+                  }}
                   className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-xs ${
                     isSelected
                       ? 'bg-white border-indigo-400 ring-2 ring-indigo-500/15 shadow-sm'
@@ -1640,7 +1923,7 @@ export function AdminOrdersView({
                             }}
                             className={`w-4 h-4 rounded-full border flex items-center justify-center cursor-pointer transition-colors shrink-0 ${
                               isChecked
-                                ? 'bg-indigo-600 border-indigo-600 text-white'
+                                ? 'bg-[#0F172A] border-[#0F172A] text-white'
                                 : 'border-slate-300 hover:border-slate-400'
                             }`}
                           >
@@ -1988,6 +2271,263 @@ export function AdminOrdersView({
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING SCHEDULE BANNER (Matching Screenshot 1) */}
+      {checkedOrderIds.length > 0 && !isSchedulesViewActive && !isGiveOrderActive && (
+        <div
+          id="floating-schedule-banner"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#0D1322] border border-slate-800 text-white rounded-full shadow-2xl pl-5 pr-3 py-2 flex items-center gap-3.5 animate-in fade-in slide-in-from-bottom-3 duration-200"
+        >
+          <span className="text-xs font-semibold text-white/95 whitespace-nowrap">
+            {checkedOrderIds.length} selected
+          </span>
+
+          <button
+            type="button"
+            id="schedule-status-change-btn"
+            onClick={() => setIsScheduleModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-[#5443ED] hover:bg-[#4332D6] text-white text-xs font-bold rounded-full px-4 py-2 shadow-md transition-all cursor-pointer"
+          >
+            <AlarmClock size={15} />
+            <span>Schedule status change</span>
+          </button>
+
+          <button
+            type="button"
+            id="clear-selected-orders-btn"
+            onClick={() => setCheckedOrderIds([])}
+            className="text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer px-2"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
+      {/* SCHEDULE STATUS CHANGE MODAL (Matching Screenshot 2) */}
+      {isScheduleModalOpen && (
+        <div
+          id="schedule-status-modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsScheduleModalOpen(false)
+              setIsTargetStatusDropdownOpen(false)
+            }
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            id="schedule-status-modal-container"
+            className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-4 animate-in fade-in zoom-in-95 duration-150 relative"
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-base text-slate-900 leading-tight m-0">
+                  Schedule status change
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 m-0">
+                  Apply the same status change to {checkedOrderIds.length} selected orders at a chosen time.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScheduleModalOpen(false)
+                  setIsTargetStatusDropdownOpen(false)
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Target status Section */}
+            <div className="space-y-1.5 relative">
+              <label className="block text-xs font-bold text-slate-700">Target status</label>
+              <button
+                type="button"
+                id="target-status-select-btn"
+                onClick={() => setIsTargetStatusDropdownOpen(!isTargetStatusDropdownOpen)}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 shadow-2xs hover:border-slate-300 transition-all cursor-pointer text-left"
+              >
+                <span>
+                  {SCHEDULE_TARGET_STATUSES.find((s) => s.id === scheduleTargetStatus)?.label} —{' '}
+                  <span className="text-slate-500 font-normal">
+                    {SCHEDULE_TARGET_STATUSES.find((s) => s.id === scheduleTargetStatus)?.desc}
+                  </span>
+                </span>
+                <ChevronDown
+                  size={15}
+                  className={`text-slate-400 transition-transform ${isTargetStatusDropdownOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {isTargetStatusDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 divide-y divide-slate-100 overflow-hidden">
+                  {SCHEDULE_TARGET_STATUSES.map((status) => (
+                    <button
+                      key={status.id}
+                      type="button"
+                      onClick={() => {
+                        setScheduleTargetStatus(status.id)
+                        setIsTargetStatusDropdownOpen(false)
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 text-xs flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors ${
+                        scheduleTargetStatus === status.id
+                          ? 'bg-indigo-50/70 text-indigo-900 font-bold'
+                          : 'text-slate-700'
+                      }`}
+                    >
+                      <span>
+                        <span className="font-bold">{status.label}</span> —{' '}
+                        <span className="text-slate-500 font-normal">{status.desc}</span>
+                      </span>
+                      {scheduleTargetStatus === status.id && (
+                        <Check size={14} className="text-indigo-600 shrink-0 ml-2" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* When to run Section with Segmented Control */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700">When to run</span>
+                <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setWhenToRunMode('timer')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      whenToRunMode === 'timer'
+                        ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Timer (in)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWhenToRunMode('datetime')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      whenToRunMode === 'datetime'
+                        ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Date & time
+                  </button>
+                </div>
+              </div>
+
+              {whenToRunMode === 'timer' ? (
+                <div className="space-y-2.5">
+                  {/* Hours & Minutes inputs */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Hours</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={timerHours}
+                        onChange={(e) => setTimerHours(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:outline-hidden focus:border-indigo-500 shadow-2xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Minutes</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="59"
+                        value={timerMinutes}
+                        onChange={(e) =>
+                          setTimerMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))
+                        }
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:outline-hidden focus:border-indigo-500 shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Presets matching Screenshot 2 */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {TIMER_PRESETS.map((preset) => {
+                      const isActive = timerHours === preset.h && timerMinutes === preset.m
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            setTimerHours(preset.h)
+                            setTimerMinutes(preset.m)
+                          }}
+                          className={`px-3 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                            isActive
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-bold'
+                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* Date & Time inputs */
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={customScheduleDate}
+                      onChange={(e) => setCustomScheduleDate(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:outline-hidden focus:border-indigo-500 shadow-2xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Time</label>
+                    <input
+                      type="time"
+                      value={customScheduleTime}
+                      onChange={(e) => setCustomScheduleTime(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:outline-hidden focus:border-indigo-500 shadow-2xs"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Green Preview Box matching Screenshot 2 */}
+            <div className="bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] text-xs font-medium px-3.5 py-2.5 rounded-xl">
+              {formatRunAt(calculatedRunDate)}
+            </div>
+
+            {/* Footer Buttons matching Screenshot 2 */}
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScheduleModalOpen(false)
+                  setIsTargetStatusDropdownOpen(false)
+                }}
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="confirm-schedule-submit-btn"
+                onClick={handleScheduleSubmit}
+                className="px-5 py-2 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                Schedule
+              </button>
+            </div>
           </div>
         </div>
       )}

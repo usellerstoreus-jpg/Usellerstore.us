@@ -19,6 +19,8 @@ import {
 import { isSupabaseConfigured } from '@/lib/supabase/client'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { AdminDashboardView } from '@/components/admin/AdminDashboardView'
+import { AdminInviteWidget } from '@/components/admin/AdminInviteWidget'
+import { signOutAdmin } from '@/lib/admin-invite'
 import {
   Grid2X2,
   Users,
@@ -189,16 +191,10 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Invite Code Widget */}
-        <div className="invite mx-4 p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs text-slate-600">
-          <span>
-            INVITE <b className="text-slate-900 font-bold ml-1">MXSVHSDL</b>
-          </span>
-          <div className="flex items-center gap-1.5 text-slate-400">
-            <Copy size={14} className="hover:text-slate-700 cursor-pointer" onClick={() => showToast('Invite code copied')} />
-            <Pencil size={14} className="hover:text-slate-700 cursor-pointer" onClick={() => showToast('Edit invite code')} />
-            <RefreshCw size={14} className="hover:text-slate-700 cursor-pointer" onClick={() => showToast('Refreshed invite code')} />
-          </div>
-        </div>
+        <AdminInviteWidget
+          className="mx-4 p-2.5 rounded-xl bg-slate-50 border border-slate-100"
+          onToast={showToast}
+        />
 
         {/* Nav Links */}
         <nav className="admin-nav flex-1 overflow-y-auto p-3 space-y-1" aria-label="Admin navigation">
@@ -251,7 +247,10 @@ export default function AdminDashboardPage() {
           <button
             type="button"
             className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
-            onClick={() => router.push('/')}
+            onClick={() => {
+              signOutAdmin()
+              router.push('/')
+            }}
           >
             <LogOut size={16} />
             <span>Sign Out</span>
